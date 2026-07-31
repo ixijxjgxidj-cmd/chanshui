@@ -27,7 +27,8 @@
   上传解析与 JSON 组装并发。
 - 宁可空表不可报错：波形质量问题（缺分量、采样率异常……）降级为该台站空 P/S，
   HTTP 仍 200 —— 评分只损失该台站，绝不因单文件把整轮请求打成 5xx。
-  真正的协议错误（没传文件）才返回 4xx。
+  畸形 multipart / 空文件字段同样降级 200 {}；4xx 只留给"既无文件字段又无
+  body"的裸请求（400）与正文超限（413，公网防灌爆）。
 - 到时格式与 ``str(obspy.UTCDateTime)`` 一致：微秒 6 位 + "Z" 后缀。
 
 ===== 用法 =====
@@ -40,6 +41,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import io
 import os
 import sys
@@ -47,11 +49,42 @@ import threading
 import time
 import traceback
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+from phasepicker.defaults import (  # noqa: E402
+    DEFAULT_P_MERGE_WINDOW_S,
+    DEFAULT_P_THRESHOLD,
+    DEFAULT_PRETRAINED,
+    DEFAULT_S_MERGE_WINDOW_S,
+    DEFAULT_S_THRESHOLD,
+)
 from phasepicker.types import PhaseType, Pick, Waveform  # noqa: E402
+
+
+# ---------------------------------------------------------------------------
+# seisbench 原生内存泄漏缓解（0.11.4 与 0.12.2 实测泄漏行为完全相同）
+# ---------------------------------------------------------------------------
+# classify() 每次调用都 asyncio.run 新建事件循环+新默认线程池，torch 前向经
+# asyncio.to_thread 落在**每请求一条的新线程**上；每条碰过 torch/oneDNN 的新线程
+# 留下 ~3.3MB 线程级原生内存（TLS/scratchpad），线程退出不归还、gc 不可达
+# （实测每请求 gc.collect() 零效果）。把 to_thread 内联到调用线程即根治：
+# 300 请求 commit 增长 981.7MB → 1.9MB、33 → 19 ms/call，picks 字节级一致
+# （md5 8b06ae99677f37baf87418fb3fb742b6，见 outputs/leak_probe.py）。
+# 安全性：本进程内只有 seisbench 调 asyncio.to_thread（starlette/fastapi 走的
+# 是 anyio 线程池），且推理已被 Engine._lock 串行化。必须在任何 classify
+# （含预热）之前生效，故放模块级。经 HTTP 调用时前向落在 anyio 线程池工人上，
+# 残余增长被池大小一次性封顶（~40 线程），不再随请求数线性涨。
+async def _to_thread_inline(func, /, *args, **kwargs):
+    return func(*args, **kwargs)
+
+
+asyncio.to_thread = _to_thread_inline
+
+# U1: 公网无鉴权端口的正文上限。官方单文件 ≤35MB，200MB 已留足余量；
+# 声明超限直接 413，实际读取也按此截断，防无 Content-Length 的流灌爆内存。
+MAX_BODY_BYTES = 200 * 1024 * 1024
 
 # FastAPI 必须在模块级导入：本文件启用了 `from __future__ import annotations`，
 # 处理函数的 `request: Request` 注解是字符串，FastAPI 用 get_type_hints 按模块
@@ -181,6 +214,10 @@ def build_engine(args) -> Engine:
         batch_size=args.batch_size,
         overlap=args.overlap,
         compile_model=args.compile,
+        # getattr 兜底：老调用方传进来的 Namespace 可能没有合并窗参数，
+        # None 即交给 PickerConfig 落到 defaults.py 全局默认
+        p_merge_window_s=getattr(args, "p_merge_window", None),
+        s_merge_window_s=getattr(args, "s_merge_window", None),
     )
     picker = SeisBenchPicker.from_config(cfg)
     return Engine(picker)
@@ -189,7 +226,7 @@ def build_engine(args) -> Engine:
 # ---------------------------------------------------------------------------
 # FastAPI 应用
 # ---------------------------------------------------------------------------
-def create_app(engine: Engine):
+def create_app(engine: Engine, extra_route: Optional[str] = None):
     if _FASTAPI_IMPORT_ERROR is not None:  # pragma: no cover
         raise SystemExit(
             f"API 服务需要 FastAPI：{_FASTAPI_IMPORT_ERROR!r}\n"
@@ -212,31 +249,59 @@ def create_app(engine: Engine):
     def health():
         return {"status": "ok"}
 
+    async def _read_body_capped(request: Request) -> bytes:
+        """非 multipart 正文的截断式读取：读满上限即停，不整段吞进内存。"""
+        buf = bytearray()
+        async for chunk in request.stream():
+            buf.extend(chunk)
+            if len(buf) >= MAX_BODY_BYTES:
+                break
+        return bytes(buf[:MAX_BODY_BYTES])
+
     async def _handle(request: Request):
         t0 = time.perf_counter()
+
+        # U1: 声明长度超限在读任何正文之前就拒；畸形 Content-Length（非数字）
+        # 不在此拦，由下面的截断读取兜底
+        declared = request.headers.get("content-length") or ""
+        if declared.isdigit() and int(declared) > MAX_BODY_BYTES:
+            return JSONResponse(
+                status_code=413,
+                content={"error": f"正文超过上限 {MAX_BODY_BYTES} 字节"},
+            )
+
         payloads: List[bytes] = []
         content_type = (request.headers.get("content-type") or "").lower()
-        if "multipart/form-data" in content_type:
-            form = await request.form()
-            # multi_items()：同名字段（requests 传多个文件常这么编码）逐个取，
-            # 用 values() 会丢同名重复项
-            for _key, value in form.multi_items():
-                read = getattr(value, "read", None)
-                if read is None:
-                    continue  # 非文件字段忽略
-                data = await read()
-                if data:
-                    payloads.append(data)
-        else:
-            body = await request.body()
-            if body:
+        try:
+            if "multipart/form-data" in content_type:
+                form = await request.form()
+                # multi_items()：同名字段（requests 传多个文件常这么编码）逐个取，
+                # 用 values() 会丢同名重复项
+                for _key, value in form.multi_items():
+                    read = getattr(value, "read", None)
+                    if read is None:
+                        continue  # 非文件字段忽略
+                    data = await read(MAX_BODY_BYTES)
+                    if data:
+                        payloads.append(data)
+                if not payloads:
+                    # U21: 走到这说明请求确实按 multipart 发了（哪怕文件字段是
+                    # 0 字节、或只有文本字段）——按"宁可空表"返回 200 {}；
+                    # 400 只留给下面既无文件字段又无 body 的裸请求
+                    return JSONResponse(content={})
+            else:
+                body = await _read_body_capped(request)
+                if not body:
+                    return JSONResponse(
+                        status_code=400,
+                        content={"error": "未收到波形文件：请以 multipart files= 上传 .mseed"},
+                    )
                 payloads.append(body)  # 兼容直接把 mseed 当 body POST
-
-        if not payloads:
-            return JSONResponse(
-                status_code=400,
-                content={"error": "未收到波形文件：请以 multipart files= 上传 .mseed"},
-            )
+        except Exception:  # noqa: BLE001
+            # C8: multipart/正文解析层的畸形输入（异常 boundary、截断头部……）
+            # 也必须守住"绝不 5xx"契约——降级 200 {}，留 traceback 便于排查
+            traceback.print_exc()
+            return JSONResponse(content={})
 
         merged: Dict[str, Dict[str, List[str]]] = {}
         for raw in payloads:
@@ -265,20 +330,29 @@ def create_app(engine: Engine):
     app.post("/")(_handle)
     app.post("/pick")(_handle)
     app.post("/predict")(_handle)
+    if extra_route:
+        # U1 附加加固（默认关）：公网扫描器只打常见路径，平台登记时可只报
+        # 这个不可猜的入口
+        app.post(extra_route if extra_route.startswith("/") else "/" + extra_route)(_handle)
     return app
 
 
-def main(argv=None) -> int:
+def make_arg_parser() -> argparse.ArgumentParser:
+    """CLI 定义单独成函数，测试可直接校验默认值与 defaults.py 单一真源一致。"""
     ap = argparse.ArgumentParser(description="官方标准震相拾取 API 服务")
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--weights", default=None, help="本地微调权重 (.pt)")
-    ap.add_argument("--pretrained", default="diting",
+    ap.add_argument("--pretrained", default=DEFAULT_PRETRAINED,
                     help="SeisBench 基础权重名（去年真题 A/B 实测 diting 1.899 > "
                          "stead 1.496，见 deploy/README.md）")
     ap.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
-    ap.add_argument("--p-threshold", type=float, default=0.3)
-    ap.add_argument("--s-threshold", type=float, default=0.3)
+    ap.add_argument("--p-threshold", type=float, default=DEFAULT_P_THRESHOLD)
+    ap.add_argument("--s-threshold", type=float, default=DEFAULT_S_THRESHOLD)
+    ap.add_argument("--p-merge-window", type=float, default=DEFAULT_P_MERGE_WINDOW_S,
+                    help="P 波去重合并窗（秒）")
+    ap.add_argument("--s-merge-window", type=float, default=DEFAULT_S_MERGE_WINDOW_S,
+                    help="S 波去重合并窗（秒）")
     ap.add_argument("--batch-size", type=int, default=256)
     ap.add_argument("--threads", type=int, default=None, help="CPU 推理线程数（默认满核）")
     ap.add_argument("--fp16", action="store_true", help="CUDA 半精度推理")
@@ -287,8 +361,16 @@ def main(argv=None) -> int:
                          "调小提速；须先用 ab_compare.py 验证同分")
     ap.add_argument("--compile", action="store_true",
                     help="torch.compile 加速（PyTorch 2.x；老显卡不支持会自动回退）")
+    ap.add_argument("--route", default=None,
+                    help="额外注册一个隐蔽入口路径，默认不开启；/、/pick、/predict "
+                         "始终可用。Git Bash 下写不带前导斜杠的 pick-x7f3a9"
+                         "（/开头会被 MSYS 改写成 Windows 路径），两种写法等价")
     ap.add_argument("--no-warmup", action="store_true")
-    args = ap.parse_args(argv)
+    return ap
+
+
+def main(argv=None) -> int:
+    args = make_arg_parser().parse_args(argv)
 
     print("加载模型 …", flush=True)
     engine = build_engine(args)
@@ -296,7 +378,7 @@ def main(argv=None) -> int:
         dt = engine.warmup()
         print(f"预热完成（{dt*1000:.0f}ms）")
 
-    app = create_app(engine)
+    app = create_app(engine, extra_route=args.route)
     try:
         import uvicorn
     except ImportError:

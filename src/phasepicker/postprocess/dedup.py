@@ -22,12 +22,12 @@ from dataclasses import dataclass
 from typing import List, Optional, Sequence
 
 from ..types import Pick, PhaseType
+from ..defaults import DEFAULT_P_MERGE_WINDOW_S, DEFAULT_S_MERGE_WINDOW_S
 
-# 默认合并窗口：P/S 分别取远小于各自计分容差（0.1s / 0.2s）的值，
-# 保证"该合并的合并了，不该合并的（真的是两个震相）不会被误并"。
+# 默认合并窗口：数值收口在 defaults.py（全局单一真源，P3 网格调参只改那里）。
 DEFAULT_MERGE_WINDOW_S = {
-    PhaseType.P: 0.05,
-    PhaseType.S: 0.10,
+    PhaseType.P: DEFAULT_P_MERGE_WINDOW_S,
+    PhaseType.S: DEFAULT_S_MERGE_WINDOW_S,
 }
 
 

@@ -1,0 +1,129 @@
+# 评测日 Runbook（U13）
+
+开放窗口约 1 天，任何小时级的服务半死都是该时段样本全丢。本文假设服务器上仓库在
+`/root/dizheng`（下文记 `$REPO`），服务为 systemd 单元 `phasepick-api`，端口 8000。
+
+速查：
+
+```bash
+journalctl -u phasepick-api -f                        # 看日志
+systemctl restart phasepick-api                       # 重启
+systemctl show phasepick-api -p MemoryCurrent         # 当前内存
+sudo bash $REPO/deploy/deploy_api.sh                  # 一键重部（幂等）
+bash $REPO/deploy/watchdog.sh                         # 手动跑一次真实请求探活
+```
+
+---
+
+## 1. T-1 检查单（评测前一天，全部打勾）
+
+- [ ] **外网复测**：从**非服务器**机器（家里/公司电脑）用去年真题打公网地址，全绿：
+  `PYTHONUTF8=1 python scripts/check_api.py --url http://<公网IP>:8000/pick --input "<第1轮真题zip>" --limit 20`
+- [ ] **安全组**：云控制台确认 TCP 8000 对 0.0.0.0/0 放行（截图留档）。
+- [ ] **磁盘余量**：`df -h` 根分区 > 5GB；不够先 `journalctl --vacuum-size=200M`。
+- [ ] **权重指纹**：`md5sum $REPO/weights/*.tar.gz` 与本地记录一致；
+  `systemctl cat phasepick-api | grep ExecStart` 抄下全行（基座/权重/阈值为证，出问题时对照）。
+- [ ] **基线延迟记录**：把上面外网复测输出的 均值/中位/最大 延迟与 P/S 总数抄进值班笔记，
+  评测中延迟翻倍/拾取数异常时对照。
+- [ ] **内存 soak 复测**（泄漏补丁的 Linux 侧验证，本地探针数字是 Windows 的）：
+  ```bash
+  systemctl show phasepick-api -p MemoryCurrent                    # 前
+  PYTHONUTF8=1 $REPO/.venv/bin/python $REPO/scripts/check_api.py \
+    --url http://127.0.0.1:8000/pick --input "<第1轮真题zip>" --limit 300
+  systemctl show phasepick-api -p MemoryCurrent                    # 后
+  ```
+  300 条后增长 < ~200MB 视为通过；若接近 GB 级说明泄漏补丁在该环境失效，
+  靠 MemoryHigh/Max 护栏也能撑，但要把 watchdog cron 间隔缩到 2 分钟并升配内存。
+- [ ] **变体演练**：多台站与 50Hz 样本各打一遍 HTTP，响应格式正常（命令见 §5）。
+- [ ] **探活 cron 已装**且最近一次输出 OK（见 §2）。
+- [ ] **平台登记地址**再次核对是 `http://<公网IP>:8000/pick`（不是 /health、不是内网 IP）。
+
+---
+
+## 2. 探活与自动恢复（cron，每 5 分钟）
+
+`/health` 是静态返回、不经过推理引擎；推理互斥锁被一次挂死请求占住时进程不退出、
+systemd 不拉起、/health 依旧绿。**判活必须用真实波形打 /pick**，这正是
+`deploy/watchdog.sh` 做的事（失败自动 `systemctl restart` + webhook 告警）。
+
+```bash
+# 1) 放一条去年真题 mseed 当探测样例（不放也行，watchdog 会自动生成合成波形兜底）
+mkdir -p $REPO/probe_sample && scp <本地某条真题.mseed> root@<IP>:$REPO/probe_sample/
+
+# 2) 手动跑一次确认 OK
+bash $REPO/deploy/watchdog.sh
+
+# 3) 装 cron（WEBHOOK_URL 填钉钉/企微机器人地址，留空=只写日志不告警）
+crontab -e
+# */5 * * * * WEBHOOK_URL='' bash /root/dizheng/deploy/watchdog.sh >> /root/dizheng/watchdog.log 2>&1
+```
+
+评测中每小时瞄一眼 `tail $REPO/watchdog.log`：连续 FAIL→restart 循环 = 转 §4 处置。
+
+---
+
+## 3. Fallback 阶梯（从上往下试，每步 3~10 分钟，做完必须复跑 §2 手动探活 + 外网复测）
+
+| 级 | 症状 | 动作 |
+|---|---|---|
+| 1 | 服务半死/挂死/偶发失败 | `systemctl restart phasepick-api`（watchdog 会自动做） |
+| 2 | diting 权重异常（加载失败/拾取明显异常） | 切 stead 基座：`sudo PRETRAINED=stead bash $REPO/deploy/deploy_api.sh`（去年 R1 前200条 1.496，比 diting 1.899 低但可用） |
+| 3 | 基座全不可用而本地微调件在 | `sudo PRETRAINED=stead WEIGHTS=$REPO/weights/phasenet_iquique_full_best.pt bash $REPO/deploy/deploy_api.sh`（stead+Iquique 全量微调，R1 前200条 1.678；注意微调基座是 stead，勿配 diting） |
+| 4 | 整机挂/网络不可达 | 备用机重部（预算 ~15 分钟：`git clone` → `sudo bash deploy/deploy_api.sh` → 安全组放行）→ 平台**改登记地址**并通知组委确认生效 |
+
+P2/P3 产出后的正常切换（非故障）：带环境变量重跑部署脚本，例如
+`sudo WEIGHTS=$REPO/weights/best.pt P_THRESHOLD=0.2 S_THRESHOLD=0.15 bash $REPO/deploy/deploy_api.sh`
+（阈值留空 = 用 `src/phasepicker/defaults.py` 全局默认，当前 P=0.2 / S=0.15）。
+
+---
+
+## 4. 常见故障 → 处置表
+
+| 症状 | 判定 | 处置 |
+|---|---|---|
+| 健康门 180s 超时 / curl /health 不通 | `journalctl -u phasepick-api -n 50` 看崩溃栈 | 权重加载崩→阶梯2；依赖崩→重跑 deploy 脚本看 [2/6] 是否红 |
+| journalctl 反复 "bind: address already in use" | 旧 nohup 实例占端口：`ss -ltnp \| grep :8000` | `kill $(cat $REPO/serve_api.supervisor.pid) $(cat $REPO/serve_api.pid)`；没有 PID 文件就按 ss 给的 pid 精确 kill（**不要 pkill -f**） |
+| /health 绿但 /pick 全超时 | 推理锁挂死（watchdog 会探到） | `systemctl restart phasepick-api` |
+| 服务被频繁 OOM 杀（journalctl 见 oom-kill / MemoryMax） | `watchdog.log` restart 频率 >2次/小时 | 泄漏护栏在兜底但太频繁：升配内存重部，或把 watchdog 改 2 分钟一跑硬扛 |
+| UnicodeDecodeError / GBK/ASCII 编码栈 | systemd 干净环境编码问题 | 本包单元已带 `PYTHONUTF8=1`，若见此错说明跑的是旧单元：重跑 deploy 脚本覆盖 |
+| 磁盘满 | `df -h` | `journalctl --vacuum-size=200M`；`rm $REPO/serve_api.log*`（nohup 路径日志是追加的，会长大） |
+| 官方发了多台站/非100Hz 文件，响应看着异常 | 代码本身支持这两条路径（已演练§5） | 保存该样本文件与响应 JSON 留档复盘；只要 200+JSON 格式对就不动服务 |
+| 平台侧显示 4xx/不可用 | 外网 `check_api` 复测 | 外网绿→查平台登记地址（/pick、公网 IP、端口）；外网红→安全组/防火墙 `firewall-cmd --list-ports` |
+
+---
+
+## 5. 变体演练命令（T-1 做一遍）
+
+去年 1915 条真题全部是单台站 100Hz，但代码支持多台站与非 100Hz——评测日前先从
+HTTP 层各演练一次，别让第一次真实流量当小白鼠。在服务器上：
+
+```bash
+PY=$REPO/.venv/bin/python
+
+# 50Hz 变体：把一条真题重采样到 50Hz 再打
+PYTHONUTF8=1 $PY - <<'EOF'
+import obspy
+st = obspy.read("/root/dizheng/probe_sample/*.mseed")
+st.resample(50.0)
+st.write("/tmp/variant_50hz.mseed", format="MSEED")
+EOF
+PYTHONUTF8=1 $PY $REPO/scripts/check_api.py --url http://127.0.0.1:8000/pick --input /tmp/variant_50hz.mseed
+
+# 多台站单文件：两个台站六道合成
+PYTHONUTF8=1 $PY - <<'EOF'
+import numpy as np, obspy
+rng = np.random.default_rng(11)
+st = obspy.Stream()
+for sta in ("AAA", "BBB"):
+    for comp in "ENZ":
+        tr = obspy.Trace(rng.standard_normal(9000).astype("float32"))
+        tr.stats.sampling_rate = 100.0
+        tr.stats.station, tr.stats.network, tr.stats.channel = sta, "XB", "BH"+comp
+        st.append(tr)
+st.write("/tmp/variant_multista.mseed", format="MSEED")
+EOF
+PYTHONUTF8=1 $PY $REPO/scripts/check_api.py --url http://127.0.0.1:8000/pick --input /tmp/variant_multista.mseed
+```
+
+两条都应返回 200 + 合法 JSON（多台站响应应含两个台站键）。任何异常记录样本与
+响应，评测日照 §4 最后一行处置。

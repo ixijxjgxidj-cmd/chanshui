@@ -47,6 +47,12 @@ def _iter_picks(result: PickResult) -> List[Pick]:
     return list(result)
 
 
+def _sorted_pairs(pairs: List[Tuple[float, float]]) -> Tuple[List[float], List[float]]:
+    """(到时, 置信度) 对按到时升序排序后拆成两个下标对齐的并行列表。"""
+    pairs.sort(key=lambda x: x[0])
+    return [t for t, _ in pairs], [c for _, c in pairs]
+
+
 def picks_to_task1_result(
     file_id: str,
     picks: Iterable[Pick],
@@ -57,6 +63,8 @@ def picks_to_task1_result(
     这是换算的唯一落点：每个 Pick 相对 ``waveform_starttime_utc`` 求偏移秒，
     按 P/S 分流，丢弃负偏移（pick 落在波形起点之前——理论上不该出现，出现即
     数据/对齐异常，宁可丢弃也不上报一个荒谬到时），最后各自升序排序。
+    Pick.confidence 随到时一起带出（p_confidences/s_confidences 与到时下标对齐），
+    供密集余震场景的后处理使用；T1.an 写出不含它。
 
     Args:
         file_id: 文件标识（basename），作为对齐用的唯一键。
@@ -66,8 +74,8 @@ def picks_to_task1_result(
     Returns:
         Task1Result，p_times_s / s_times_s 为相对秒（float，升序）。
     """
-    p_times: List[float] = []
-    s_times: List[float] = []
+    p_pairs: List[Tuple[float, float]] = []
+    s_pairs: List[Tuple[float, float]] = []
     for pick in picks:
         rel = float(pick.time_utc) - float(waveform_starttime_utc)
         if rel < 0.0:
@@ -78,13 +86,20 @@ def picks_to_task1_result(
                 rel,
             )
             continue
+        conf = float(getattr(pick, "confidence", 0.0) or 0.0)
         if pick.phase == PhaseType.P:
-            p_times.append(rel)
+            p_pairs.append((rel, conf))
         elif pick.phase == PhaseType.S:
-            s_times.append(rel)
-    p_times.sort()
-    s_times.sort()
-    return Task1Result(file_id=file_id, p_times_s=p_times, s_times_s=s_times)
+            s_pairs.append((rel, conf))
+    p_times, p_confs = _sorted_pairs(p_pairs)
+    s_times, s_confs = _sorted_pairs(s_pairs)
+    return Task1Result(
+        file_id=file_id,
+        p_times_s=p_times,
+        s_times_s=s_times,
+        p_confidences=p_confs,
+        s_confidences=s_confs,
+    )
 
 
 def pick_waveform_to_task1_result(
@@ -116,16 +131,27 @@ def _merge_task1_results(file_id: str, parts: Iterable[Task1Result]) -> Task1Res
     """把同一文件内多个波形（多台站）的 Task1Result 合并为一个。
 
     一个 .mseed 文件可能含多台站；官方以"文件"为最小评测单位，故所有台站的
-    P/S 都并入同一个 Task1Result。合并后各自重新升序排序，保证输出稳定。
+    P/S 都并入同一个 Task1Result。合并后各自重新升序排序，保证输出稳定；
+    置信度随到时成对搬运（部分来源缺置信度时按 0.0 对齐，保持并行列表等长）。
     """
-    p_times: List[float] = []
-    s_times: List[float] = []
+    p_pairs: List[Tuple[float, float]] = []
+    s_pairs: List[Tuple[float, float]] = []
     for part in parts:
-        p_times.extend(part.p_times_s)
-        s_times.extend(part.s_times_s)
-    p_times.sort()
-    s_times.sort()
-    return Task1Result(file_id=file_id, p_times_s=p_times, s_times_s=s_times)
+        for times, confs, pairs in (
+            (part.p_times_s, part.p_confidences, p_pairs),
+            (part.s_times_s, part.s_confidences, s_pairs),
+        ):
+            for i, t in enumerate(times):
+                pairs.append((t, confs[i] if i < len(confs) else 0.0))
+    p_times, p_confs = _sorted_pairs(p_pairs)
+    s_times, s_confs = _sorted_pairs(s_pairs)
+    return Task1Result(
+        file_id=file_id,
+        p_times_s=p_times,
+        s_times_s=s_times,
+        p_confidences=p_confs,
+        s_confidences=s_confs,
+    )
 
 
 def run_task1_samples(

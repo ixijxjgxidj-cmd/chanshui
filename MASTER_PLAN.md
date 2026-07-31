@@ -27,7 +27,7 @@
 ```
 ┌─────────────────────── 榜单冲分层（官方自动评分）───────────────────────┐
 │  mseed 波形 → 质控/预处理 → PhaseNet(微调) 拾取 → 去重/数量控制 → P/S 到时 │
-│  ↑ 全部已有可运行代码，评分器已 49 项单测覆盖                              │
+│  ↑ 全部已有可运行代码，评分器有专门单测覆盖                                │
 └──────────────────────────────────────────────────────────────────────┘
                                     │  P/S 到时（多台站）
                                     ▼
@@ -71,7 +71,7 @@
 | 训练/评分 CLI | `scripts/train.py`, `run_local_scoring.py` | ✅ |
 | Cloud Studio 启动 | `scripts/cloudstudio_launch.sh` | ✅ |
 
-**纯逻辑核心共 49 项单元测试全部通过**（时间对齐、评分匹配、去重、config、seed、split、checkpoint、label adapter）。torch/obspy 相关代码在你本机/云 GPU 上跑。
+**纯逻辑核心单元测试全部通过**（时间对齐、评分匹配、去重、config、seed、split、checkpoint、label adapter；数量随开发增长，以 `pytest tests/` 为准）。torch/obspy 相关代码在你本机/云 GPU 上跑。
 
 ---
 

@@ -28,6 +28,12 @@ from typing import List, Sequence
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from phasepicker.types import ExamSample, ExamTask, Waveform  # noqa: E402
+from phasepicker.defaults import (  # noqa: E402
+    DEFAULT_P_THRESHOLD,
+    DEFAULT_PRETRAINED,
+    DEFAULT_S_THRESHOLD,
+)
+from phasepicker.scoring.scorer import DEFAULT_PENALTY_MODE, PENALTY_MODES  # noqa: E402
 from phasepicker.io.official_exam import scan_exam_input  # noqa: E402
 from phasepicker.io.submission_writer import write_task1_results  # noqa: E402
 from phasepicker.tasks.task1_runner import (  # noqa: E402
@@ -113,22 +119,31 @@ def _make_picker(
         raise SystemExit(f"加载模型失败：{exc!r}")
 
 
-def main(argv=None) -> int:
+def build_arg_parser() -> argparse.ArgumentParser:
+    """CLI 参数定义单独成函数，便于单测校验默认值与 defaults.py 同源。"""
     ap = argparse.ArgumentParser(description="官方 T1 端到端拾取（输出相对秒 T1.an）")
     ap.add_argument("--input", required=True, help="官方输入目录或 zip")
     ap.add_argument("--output", required=True, help="输出提交文件（T1.an）")
     ap.add_argument("--weights", default=None, help="可选：本地微调权重 (.pt) 路径")
-    ap.add_argument("--pretrained", default="stead",
-                    help="SeisBench 基础权重名；默认 stead（本地微调权重也按此结构加载）")
+    ap.add_argument("--pretrained", default=DEFAULT_PRETRAINED,
+                    help="SeisBench 基础权重名；默认取 phasepicker.defaults（与部署 API 同源）")
     ap.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"],
                     help="推理设备；默认 auto（有 CUDA 用 CUDA，否则 CPU）")
-    ap.add_argument("--p-threshold", type=float, default=0.3, help="P 波触发概率阈值")
-    ap.add_argument("--s-threshold", type=float, default=0.3, help="S 波触发概率阈值")
+    ap.add_argument("--p-threshold", type=float, default=DEFAULT_P_THRESHOLD,
+                    help="P 波触发概率阈值；默认取 phasepicker.defaults")
+    ap.add_argument("--s-threshold", type=float, default=DEFAULT_S_THRESHOLD,
+                    help="S 波触发概率阈值；默认取 phasepicker.defaults")
     ap.add_argument("--prefix", default="./T1-Q/",
                     help="写出行的路径前缀；默认第2轮官方风格 ./T1-Q/（第1轮传 exam2025/TASK01/）")
     ap.add_argument("--answer", default=None, help="可选：官方答案文件，提供则跑 official_eval 打分")
     ap.add_argument("--answer-package", default=None,
                     help="可选：直接从官方 zip（含嵌套 zip）读取 T1 答案并打分")
+    ap.add_argument("--penalty-mode", default=DEFAULT_PENALTY_MODE, choices=PENALTY_MODES,
+                    help="数量罚读法（官方规则口径存在歧义）；默认保持历史口径 merged_file_floor0")
+    ap.add_argument("--penalty-table", action="store_true",
+                    help="打分时额外输出全部数量罚读法的对照表（读法敏感度一览）")
+    ap.add_argument("--strict-missing", action="store_true",
+                    help="答案有而预测无的文件按 0 分计入均分分母（官方口径）；默认排除以便 --limit 调试")
     ap.add_argument("--limit", type=int, default=None,
                     help="仅调试：只跑前 N 个 T1 文件；正式提交不要设置")
     # ---- 性能相关 ----
@@ -138,6 +153,10 @@ def main(argv=None) -> int:
                     help="合批推理的文件窗口大小；1=逐文件推理")
     ap.add_argument("--batch-size", type=int, default=256,
                     help="SeisBench 滑窗 batch 大小（显存富余可加大）")
+    ap.add_argument("--overlap", type=float, default=0.5,
+                    help="SeisBench 滑窗重叠比例（0~1）；与 ab_compare 同名同义")
+    ap.add_argument("--compile", action="store_true",
+                    help="torch.compile 加速（先用 ab_compare 验证同分再用于正式提交）")
     ap.add_argument("--threads", type=int, default=None,
                     help="CPU 推理线程数；默认自动取满核")
     ap.add_argument("--fp16", action="store_true",
@@ -146,6 +165,11 @@ def main(argv=None) -> int:
                     help="禁用流水线/合批优化，回退原始顺序实现（排查对比用）")
     ap.add_argument("--no-validate", action="store_true",
                     help="跳过写出后的提交文件回读自检")
+    return ap
+
+
+def main(argv=None) -> int:
+    ap = build_arg_parser()
     args = ap.parse_args(argv)
 
     # 1) 扫描输入并过滤出 T1 样本
@@ -158,6 +182,13 @@ def main(argv=None) -> int:
         print(f"未在 {args.input!r} 找到任何 T1 样本（.mseed）", file=sys.stderr)
         return 1
     print(f"扫描到 {len(samples)} 个 T1 样本")
+    # 启动横幅：把实际生效的基座/阈值大声打出来，防止"以为在评 diting 实际评的 stead"
+    print(
+        f"配置: 基座={args.pretrained} 权重={args.weights or '无(纯预训练)'} "
+        f"P阈值={args.p_threshold} S阈值={args.s_threshold} "
+        f"overlap={args.overlap} device={args.device}"
+        + (" compile" if args.compile else "")
+    )
 
     # 2) 构建依赖（缺 obspy/seisbench/torch 会在此给出清晰报错）
     load_waveforms_fn = _make_load_waveforms_fn()
@@ -170,6 +201,8 @@ def main(argv=None) -> int:
         use_fp16=args.fp16,
         num_threads=args.threads,
         batch_size=args.batch_size,
+        overlap=args.overlap,
+        compile_model=args.compile,
     )
 
     # 3) 端到端推理 → 相对秒 Task1Result
@@ -233,7 +266,11 @@ def main(argv=None) -> int:
         ap.error("--answer 与 --answer-package 只能选一个")
     if args.answer or args.answer_package:
         from phasepicker.io.official_answers import parse_task1_answer_lines
-        from phasepicker.eval.official_eval import evaluate_task1
+        from phasepicker.eval.official_eval import (
+            evaluate_task1,
+            evaluate_task1_all_modes,
+            penalty_modes_table,
+        )
 
         if args.answer_package:
             from phasepicker.io.official_waveforms import read_package_answers
@@ -242,8 +279,18 @@ def main(argv=None) -> int:
         else:
             with open(args.answer, "r", encoding="utf-8", errors="replace") as f:
                 answers = parse_task1_answer_lines(f.read().splitlines())
-        report = evaluate_task1(results_map, answers)
+        report = evaluate_task1(
+            results_map,
+            answers,
+            penalty_mode=args.penalty_mode,
+            strict_missing=args.strict_missing,
+        )
         print(report.summary())
+        if args.penalty_table:
+            all_reports = evaluate_task1_all_modes(
+                results_map, answers, strict_missing=args.strict_missing
+            )
+            print(penalty_modes_table(all_reports))
 
     return 0
 

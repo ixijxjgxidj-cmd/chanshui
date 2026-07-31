@@ -20,6 +20,13 @@ data/seisbench_cache/
 *.log
 .DS_Store
 
-*.hdf5
+# 本地评审/探针/中间产物（含敏感评审报告，不进公开仓库）
+outputs/
+
+# 服务器侧运行时产物（deploy 脚本在仓库根生成）
+serve_api_supervisor.sh
+*.pid
+probe_sample/
+
 *.csv
 /content/ethz_100hz_subset.hdf5

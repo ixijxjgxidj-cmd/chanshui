@@ -1,5 +1,8 @@
 # 计划：GeoNet(新西兰) 数据 → Colab 微调 PhaseNet
 
+> **[已归档 2026-08-01]** 结论已并入 `训练与提分计划.md` 与 `deploy/README.md`，本文仅留档。
+> 现行路线：diting 基座（50Hz）+ 中国域数据微调；本文的 GeoNet 取数与 100Hz 假设不要再执行。
+
 ## 目标
 在 Google Colab 上，用 GeoNet FDSN 直连拉取新西兰真实地震数据做 PhaseNet 微调，
 断点续训、微调前后各评一次分（合成评分 + 真实留出集）。数据规模：尽量多，受 Colab 时限约束。

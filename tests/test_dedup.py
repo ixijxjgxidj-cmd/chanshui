@@ -60,9 +60,15 @@ def test_different_stations_not_merged():
 
 
 def test_s_window_wider_than_p():
-    # S 合并窗口默认 0.10s：相差 0.08s 的两个 S 应被合并；同样间距的 P 不应
-    s_picks = [_p(PhaseType.S, 100.0, 0.5), _p(PhaseType.S, 100.08, 0.6)]
-    p_picks = [_p(PhaseType.P, 100.0, 0.5), _p(PhaseType.P, 100.08, 0.6)]
+    # 合并窗约定 S 宽于 P（S 相位更钝、分裂双检测间隔更大）。取一个落在
+    # [P窗, S窗) 的间距：同间距的两个 S 应被合并、两个 P 不应——不硬编码
+    # 具体窗口数值，跟随 defaults.py 的调参结果（P3 网格）自动成立。
+    wp = DEFAULT_MERGE_WINDOW_S[PhaseType.P]
+    ws = DEFAULT_MERGE_WINDOW_S[PhaseType.S]
+    assert wp < ws
+    gap = (wp + ws) / 2
+    s_picks = [_p(PhaseType.S, 100.0, 0.5), _p(PhaseType.S, 100.0 + gap, 0.6)]
+    p_picks = [_p(PhaseType.P, 100.0, 0.5), _p(PhaseType.P, 100.0 + gap, 0.6)]
     assert len(deduplicate(s_picks)) == 1
     assert len(deduplicate(p_picks)) == 2
 

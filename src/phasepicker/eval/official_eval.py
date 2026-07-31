@@ -8,7 +8,8 @@
 - T3：事件分类，报 accuracy + 混淆矩阵 + 缺失/多余数。
 
 "缺失/多余"指预测集合与答案集合的 file_id 差集：answer 有而 pred 没有 = missing；
-pred 有而 answer 没有 = extra。只对交集文件计入分数，避免键不齐时口径混乱。
+pred 有而 answer 没有 = extra。默认只对交集文件计入分数（--limit 调试友好），
+T1 可用 strict_missing=True 把缺失按 0 分计入均分分母（官方对缺失必然记 0）。
 
 返回普通 dataclass（字段皆为内置类型），便于测试断言与直接 print。
 """
@@ -19,7 +20,13 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
 
 from ..types import Task1Result, Task2Result, Task3Result
-from ..scoring.scorer import score_file
+from ..scoring.scorer import (
+    DEFAULT_PENALTY_MODE,
+    PENALTY_MODES,
+    ScoreReport,
+    exam_total_score,
+    score_file,
+)
 
 
 def _common_keys(pred: Dict[str, object], truth: Dict[str, object]) -> Tuple[List[str], List[str], List[str]]:
@@ -35,7 +42,7 @@ def _common_keys(pred: Dict[str, object], truth: Dict[str, object]) -> Tuple[Lis
 
 @dataclass
 class Task1EvalReport:
-    """T1 评估汇总。"""
+    """T1 评估汇总。新增字段一律带默认值，保持既有构造/断言不受影响。"""
 
     total_score: float
     mean_score: float
@@ -43,12 +50,32 @@ class Task1EvalReport:
     missing: List[str] = field(default_factory=list)
     extra: List[str] = field(default_factory=list)
     per_file: Dict[str, float] = field(default_factory=dict)
+    penalty_mode: str = DEFAULT_PENALTY_MODE
+    strict_missing: bool = False
+    exam_count_penalty: float = 0.0
+    """全卷读法(*_exam)下在卷级统一扣掉的数量罚；文件级读法恒 0。"""
 
     def summary(self) -> str:
-        return (
+        head = (
             f"T1: 均分={self.mean_score:.3f} 总分={self.total_score:.3f} "
             f"文件数={self.n_files} 缺失={len(self.missing)} 多余={len(self.extra)}"
         )
+        if self.penalty_mode != DEFAULT_PENALTY_MODE:
+            head += f" [数量罚读法={self.penalty_mode}"
+            if self.penalty_mode.endswith("_exam"):
+                head += f", 卷级数量罚={self.exam_count_penalty:.1f}"
+            head += "]"
+        if self.missing:
+            head += (
+                f"\n⚠️  警告: 答案侧有 {len(self.missing)} 个文件没有预测"
+                + (
+                    "，已按 0 分计入均分分母（strict 口径）"
+                    if self.strict_missing
+                    else "，未计入均分（默认口径，--limit 调试属正常；"
+                    "正式评估请核对覆盖率或用 strict 口径按 0 分计入）"
+                )
+            )
+        return head
 
 
 def _task1_to_pairs(r: Task1Result) -> List[Tuple[str, float]]:
@@ -61,24 +88,77 @@ def _task1_to_pairs(r: Task1Result) -> List[Tuple[str, float]]:
 def evaluate_task1(
     predictions: Dict[str, Task1Result],
     answers: Dict[str, Task1Result],
+    penalty_mode: str = DEFAULT_PENALTY_MODE,
+    strict_missing: bool = False,
 ) -> Task1EvalReport:
-    """对 T1 逐文件评分并汇总。仅对共有 file_id 计分。"""
+    """对 T1 逐文件评分并汇总。
+
+    Args:
+        penalty_mode: 数量罚读法（见 scoring.scorer.PENALTY_MODES），逐文件与
+            卷级聚合使用同一读法。
+        strict_missing: True 时，答案有而预测无的文件按"空预测"参与评分——
+            计入均分分母（per_file 记 0 分），*_exam 读法下其真值数也计入
+            卷级数量罚。默认 False 保持历史口径（只对共有文件计分），
+            以免打爆 --limit 调试工作流。
+    """
     common, missing, extra = _common_keys(predictions, answers)
-    per_file: Dict[str, float] = {}
-    total = 0.0
+    scored: Dict[str, ScoreReport] = {}
     for fid in common:
-        rep = score_file(_task1_to_pairs(predictions[fid]), _task1_to_pairs(answers[fid]))
-        per_file[fid] = rep.total_score
-        total += rep.total_score
-    n = len(common)
+        scored[fid] = score_file(
+            _task1_to_pairs(predictions[fid]),
+            _task1_to_pairs(answers[fid]),
+            penalty_mode=penalty_mode,
+        )
+    if strict_missing:
+        for fid in missing:
+            scored[fid] = score_file(
+                [], _task1_to_pairs(answers[fid]), penalty_mode=penalty_mode
+            )
+    ordered_fids = sorted(scored)
+    total, exam_pen = exam_total_score(
+        [scored[fid] for fid in ordered_fids], penalty_mode
+    )
+    n = len(ordered_fids)
     return Task1EvalReport(
         total_score=total,
         mean_score=(total / n) if n else 0.0,
         n_files=n,
         missing=missing,
         extra=extra,
-        per_file=per_file,
+        per_file={fid: scored[fid].total_score for fid in ordered_fids},
+        penalty_mode=penalty_mode,
+        strict_missing=strict_missing,
+        exam_count_penalty=exam_pen,
     )
+
+
+def evaluate_task1_all_modes(
+    predictions: Dict[str, Task1Result],
+    answers: Dict[str, Task1Result],
+    strict_missing: bool = False,
+) -> Dict[str, Task1EvalReport]:
+    """一次性按全部数量罚读法各评一遍，返回 {读法: 报告}（键序同 PENALTY_MODES）。"""
+    return {
+        mode: evaluate_task1(
+            predictions, answers, penalty_mode=mode, strict_missing=strict_missing
+        )
+        for mode in PENALTY_MODES
+    }
+
+
+def penalty_modes_table(reports: Dict[str, Task1EvalReport]) -> str:
+    """把 evaluate_task1_all_modes 的结果排成对照表（官方规则读法敏感度一览）。"""
+    lines = ["数量罚读法对照（官方规则原文缺失，读法间差异越大越需向组委会确认口径）:"]
+    lines.append(f"  {'读法':<22} {'均分':>8} {'总分':>10} {'卷级罚':>8}")
+    for mode in PENALTY_MODES:
+        rep = reports.get(mode)
+        if rep is None:
+            continue
+        lines.append(
+            f"  {mode:<22} {rep.mean_score:>8.4f} {rep.total_score:>10.3f} "
+            f"{rep.exam_count_penalty:>8.1f}"
+        )
+    return "\n".join(lines)
 
 
 # ============================ T2 ============================

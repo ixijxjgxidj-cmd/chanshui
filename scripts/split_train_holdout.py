@@ -29,6 +29,21 @@ def split_keys(keys_events: list, holdout_frac: float) -> tuple:
     return train, hold
 
 
+def singleton_fraction(keys_events: list) -> float:
+    """单例事件（只有 1 个窗）占事件总数的比例。
+
+    ≈1.0 说明 event_id 几乎全是取数时的 fallback（窗 key）——"按事件切分"已静默
+    退化成按窗切分，同事件邻台窗会跨到 holdout，零交集断言照样通过但分数虚高。
+    """
+    counts: dict = {}
+    for _, ev in keys_events:
+        k = str(ev)
+        counts[k] = counts.get(k, 0) + 1
+    if not counts:
+        return 0.0
+    return sum(1 for c in counts.values() if c == 1) / len(counts)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="按事件切分训练池")
     ap.add_argument("--src", required=True)
@@ -42,8 +57,17 @@ def main() -> int:
     with h5py.File(args.src, "r") as src:
         grp = src["data"]
         keys_events = [(k, grp[k].attrs.get("event_id", k)) for k in grp.keys()]
+        frac = singleton_fraction(keys_events)
+        if frac > 0.90:
+            print(f"[严重] {frac:.0%} 的事件只有单个窗——event_id 几乎全是 fallback（窗 key），\n"
+                  f"       “按事件防泄漏”已退化成按窗切分，切出来的 holdout 分数不可信。\n"
+                  f"       请检查取数元数据是否含事件列"
+                  f"（source_id/source_origin_time/source_event_id/event_id），修好后重新取数。",
+                  file=sys.stderr)
+            return 1
         train_keys, hold_keys = split_keys(keys_events, args.holdout_frac)
-        print(f"总窗 {len(keys_events)} → train {len(train_keys)} / holdout {len(hold_keys)}")
+        print(f"总窗 {len(keys_events)} → train {len(train_keys)} / holdout {len(hold_keys)}"
+              f"（单例事件占比 {frac:.0%}）")
 
         for path, keys in ((args.train, train_keys), (args.holdout, hold_keys)):
             if os.path.exists(path):

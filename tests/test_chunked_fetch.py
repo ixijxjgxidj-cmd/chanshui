@@ -36,10 +36,10 @@ def test_cut_window_p_anchor_in_range():
         seg, p_rel, s_rel = cut_window(w, p=4500, s=5200, win=WIN, rng=rng)
         assert seg.shape == (3, WIN)
         assert 0 <= p_rel < WIN, "P 必须落在窗内"
-        # 随机锚定范围 [0.1w, 0.6w]
-        assert WIN * 0.1 - 1 <= p_rel <= WIN * 0.6 + 1
-        if s_rel >= 0:
-            assert abs((s_rel - p_rel) - 700) < 1e-6, "窗内 S-P 间距必须保持"
+        # P/S 双有效且放得下 → 联合可行区间采样：两相都离窗边 >= 盲区 margin(250)
+        assert p_rel >= 250 and s_rel <= WIN - 250
+        assert s_rel >= 0, "放得下时 S 必须同窗"
+        assert abs((s_rel - p_rel) - 700) < 1e-6, "窗内 S-P 间距必须保持"
 
 
 def test_cut_window_content_matches_source():

@@ -12,20 +12,22 @@ DiTing/CWA/CEED 这类数据集动辄 100~300GB，Colab 盘只有 ~90GB，整包
 断点续传按（块，块内下标）双层记录：重跑同一命令自动跳过已完成的块。
 
 ===== 用法（Colab / 任何 Linux）=====
-    # 台湾 CWA（100Hz、含 P/S 标注、按年分块——域上最接近华南的开放大集）
+    # 台湾 CWA（含 P/S 标注、按年分块——域上最接近华南的开放大集）。
+    # 注意 --sr 必须=微调基座原生采样率：diting 路线用 --sr 50（stead 才是 100）。
     python scripts/chunked_fetch.py --dataset CWA --out /content/train_pool.hdf5 \\
-        --cache /content/sb_cache --max-total 200000 --mirror /content/drive/MyDrive/dizheng
+        --cache /content/sb_cache --sr 50 --max-total 200000 --mirror /content/drive/MyDrive/dizheng
 
     # 纯噪声块（降误报，赛题含纯噪声条目）
     python scripts/chunked_fetch.py --dataset CWANoise --out /content/train_pool.hdf5 \\
-        --cache /content/sb_cache --noise --max-total 20000 --mirror ...
+        --cache /content/sb_cache --sr 50 --noise --max-total 20000 --mirror ...
 
     # 小集冒烟（不分块，几分钟）
     python scripts/chunked_fetch.py --dataset Iquique --out /tmp/pool.hdf5 --cache /tmp/cache
 
 输出格式与 finetune_phasenet.py --data 完全对齐：
-    group "data"，每条 (3, win) float32，attrs: p_sample_100hz / s_sample_100hz /
-    sampling_rate=100.0 / event_id（供按事件防泄漏切分）。
+    group "data"，每条 (3, win) float32，attrs: p_sample_100hz / s_sample_100hz
+    （历史名——实为 --sr 采样率下的窗内下标）/ sampling_rate=--sr /
+    event_id（供按事件防泄漏切分）。
 """
 
 from __future__ import annotations
@@ -41,6 +43,7 @@ import sys
 import numpy as np
 
 WIN_DEFAULT = 3001
+BLIND_MARGIN = 250  # diting 首尾盲区 blinding=[250,250]；P/S 距窗边留够此边距，预测才不会被抹掉
 
 
 # ---------------------------------------------------------------------------
@@ -52,13 +55,17 @@ def cut_window(
     s: float,
     win: int,
     rng: np.random.RandomState,
+    margin: int = BLIND_MARGIN,
 ) -> tuple:
     """从 (3, n) 波形切一个训练窗，返回 (window(3,win), p_rel, s_rel)。
 
     规则：
-    - 有 P：窗口起点 = P - U[win*0.1, win*0.6]（随机相位位置=免费增广），
+    - P/S 双有效且放得下（s-p <= win-2*margin）：在联合可行区间
+      start ∈ U[max(0, s-win+margin), min(p-margin, n-win)] 均匀采样，
+      保证 P、S 同窗且都离窗边 >= margin（避开盲区）；随机位置=免费增广。
+      旧版只锚 P 不看 S，S-P 大的远台样本 S 常被切出窗外（标成"无 S"）。
+    - 放不下 / 只有单相：回落锚相，起点 = 锚 - U[win*0.1, win*0.6]，
       再夹进 [0, n-win]；P/S 换算窗内下标，落窗外记 -1。
-    - 无 P 有 S：以 S 同理锚定。
     - 全无（噪声）：均匀随机起点。
     - n < win：右侧补零，P/S 下标不变（超界记 -1）。
     """
@@ -73,13 +80,20 @@ def cut_window(
         s_rel = s if 0 <= s < win else -1.0
         return out, p_rel, s_rel
 
-    anchor = p if p >= 0 else s
-    if anchor >= 0:
-        lo, hi = int(win * 0.1), int(win * 0.6)
-        start = int(anchor) - int(rng.randint(lo, hi + 1))
-    else:
-        start = int(rng.randint(0, max(1, n - win + 1)))
-    start = int(np.clip(start, 0, n - win))
+    start = None
+    if p >= 0 and s >= 0 and (s - p) <= win - 2 * margin:
+        lo = max(0, int(s) - win + margin)
+        hi = min(int(p) - margin, n - win)
+        if lo <= hi:  # hi<lo：P 贴波形头或 S 贴波形尾，联合区间被夹没，回落锚定
+            start = int(rng.randint(lo, hi + 1))
+    if start is None:
+        anchor = p if p >= 0 else s
+        if anchor >= 0:
+            lo, hi = int(win * 0.1), int(win * 0.6)
+            start = int(anchor) - int(rng.randint(lo, hi + 1))
+        else:
+            start = int(rng.randint(0, max(1, n - win + 1)))
+        start = int(np.clip(start, 0, n - win))
 
     seg = wave[:, start : start + win].astype(np.float32, copy=False)
     p_rel = p - start if p >= 0 else -1.0
@@ -109,6 +123,12 @@ def event_key(meta_row: dict, fallback: str) -> str:
         if v is not None and str(v) not in ("", "nan", "None"):
             return str(v)
     return fallback
+
+
+def fallback_alarm(n_fallback: int, n_windows: int, threshold: float = 0.5) -> bool:
+    """事件键 fallback（元数据无事件列，退化成窗 key）占比过高即告警——
+    此时按事件防泄漏切分等价于按窗切分，holdout 分会虚高。"""
+    return n_windows > 0 and (n_fallback / n_windows) > threshold
 
 
 def stable_hash01(text: str) -> float:
@@ -170,7 +190,9 @@ def main() -> int:
     ap.add_argument("--chunks", default="auto",
                     help="'auto'=全部可用块；或逗号分隔块名（如 _2019,_2020）；无块数据集自动单趟")
     ap.add_argument("--win", type=int, default=WIN_DEFAULT)
-    ap.add_argument("--sr", type=float, default=100.0, help="统一重采样目标（seisbench 会同步换算到时下标）")
+    ap.add_argument("--sr", type=float, default=100.0,
+                    help="统一重采样目标（seisbench 会同步换算到时下标）。"
+                         "必须=微调基座原生采样率：diting 路线用 --sr 50，stead 才是 100")
     ap.add_argument("--noise", action="store_true", help="纯噪声数据集：不要求 P/S，窗口随机")
     ap.add_argument("--max-per-chunk", type=int, default=0, help="每块最多抽多少窗（0=不限）")
     ap.add_argument("--max-total", type=int, default=200000, help="总窗数上限")
@@ -253,6 +275,8 @@ def main() -> int:
             print(f"    共 {total} 条，从 {start_idx} 继续；累计已写 {written}")
 
             taken = 0
+            ev_seen: set = set()
+            n_fallback = 0
             for i in range(start_idx, total):
                 if written >= args.max_total:
                     break
@@ -291,11 +315,15 @@ def main() -> int:
                 key = f"{args.dataset}{chunk}_{i:08d}"
                 if key in grp:
                     continue
+                ev = event_key(mrow, fallback=key)
+                if ev == key:
+                    n_fallback += 1
+                ev_seen.add(ev)
                 d = grp.create_dataset(key, data=seg, compression="gzip", compression_opts=4)
                 d.attrs["p_sample_100hz"] = float(p_rel)
                 d.attrs["s_sample_100hz"] = float(s_rel)
                 d.attrs["sampling_rate"] = float(args.sr)
-                d.attrs["event_id"] = event_key(mrow, fallback=key)
+                d.attrs["event_id"] = ev
                 written += 1
                 taken += 1
 
@@ -314,8 +342,17 @@ def main() -> int:
             save_progress(prog_path, prog)
             del ds
             n_rm = delete_chunk_cache(args.cache, args.dataset, chunk)
-            print(f"    块 {chunk or '<single>'} 完成：+{taken} 窗；清理缓存文件 {n_rm} 个；"
-                  f"盘剩 {free_gb(args.cache):.1f}GB")
+            print(f"    块 {chunk or '<single>'} 完成：+{taken} 窗 / 独立事件 {len(ev_seen)} 个；"
+                  f"清理缓存文件 {n_rm} 个；盘剩 {free_gb(args.cache):.1f}GB")
+            if not args.noise and fallback_alarm(n_fallback, taken):
+                # 噪声集本就无事件概念，不告警；标注集 fallback 过半=元数据列名没对上
+                print("    " + "!" * 66)
+                print(f"    !! 警告: 本块 {n_fallback}/{taken} 窗在元数据里找不到事件列，"
+                      f"event_id 退化成窗 key。")
+                print("    !!       按事件防泄漏切分将失效（变成按窗切分，holdout 分虚高）！")
+                print("    !!       先核对该数据集 metadata 的事件列名"
+                      "（候选 source_id/source_origin_time/source_event_id/event_id）再放量。")
+                print("    " + "!" * 66)
             mirror_snapshot()
 
     except KeyboardInterrupt:

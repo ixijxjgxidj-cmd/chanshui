@@ -20,9 +20,11 @@
 
 ```bash
 # 起官方标准 API（模型常驻 + 预热 + 多台站合批推理）
+# 默认基座/阈值统一取自 src/phasepicker/defaults.py：diting + P=0.2 / S=0.15
+#（去年真题 A/B：diting 1.899 > stead 1.496，见 deploy/README.md；勿再用 stead 起服务）
 pip install fastapi uvicorn python-multipart requests
-python scripts/serve_api.py --pretrained stead --port 8000          # 保底（零微调）
-python scripts/serve_api.py --weights weights/phasenet_ft.pt --port 8000  # 微调权重
+python scripts/serve_api.py --port 8000                                  # 保底（diting 零微调）
+python scripts/serve_api.py --weights weights/<best>.pt --port 8000      # P2 微调权重（先过 ab_compare）
 
 # 提交前自检：状态码 / JSON 结构 / ISO 到时格式 / 升序，全对才算过
 python scripts/check_api.py --url http://<公网IP>:8000/pick --input <mseed目录或zip>
@@ -101,9 +103,10 @@ python scripts/closed_loop.py
 | `scripts/closed_loop.py` | **读取→推理→评分**完整闭环（自包含，内嵌已测评分逻辑） |
 | `scripts/run_local_scoring.py` | 本地评分 CLI，官方评分规则复刻 |
 | `scripts/train.py` | 微调训练入口（官方数据到位后用） |
-| `weights/phasenet_stead_weights.tar.gz` | PhaseNet 预训练权重备份（1.1MB，免跨境重下） |
+| `weights/phasenet_diting_weights.tar.gz` | **部署基座** diting 预训练权重备份（约 1MB，`deploy_api.sh` 离线恢复，免跨境重下）；另有 stead 包作应急 fallback。全部权重清单与取舍状态见 `weights/README.md` |
+| `src/phasepicker/defaults.py` | 全局默认单一真源：基座 diting、阈值 P=0.2 / S=0.15、去重合并窗 |
 | `src/phasepicker/` | 工程内核：mseed 读取、预处理、推理封装、去重、评分、训练脚手架、EEW 展示层 |
-| `tests/` | 纯逻辑核心单元测试（评分/时间对齐/去重/训练/EEW，共 58 项） |
+| `tests/` | 纯逻辑核心单元测试（评分/时间对齐/去重/训练/EEW） |
 | `MASTER_PLAN.md` | 融合版方案总纲（策略 + 工程 + 决赛叙事） |
 | `ROADMAP.md` | 优先级路线图，三个"胜负手" |
 
@@ -112,7 +115,7 @@ python scripts/closed_loop.py
 ## 三、关键约束与设计原则
 
 - **网络**：国内免费机跨境下载数据集极慢且关机不留。因此不下大数据集，
-  用合成数据验证链路；预训练权重（仅 1.1MB）备份进仓库。
+  用合成数据验证链路；预训练权重包（diting/stead，各约 1MB）备份进仓库。
 - **持久化**：GPU 机器上一切关机即毁。唯一可信副本 = 本地 + Gitee 仓库。
   训练产物（checkpoint）需实时外送（见 `src/phasepicker/training/checkpoint.py`）。
 - **时间对齐**：模型输出采样点下标，换算绝对到时的逻辑集中在
@@ -122,12 +125,18 @@ python scripts/closed_loop.py
 
 ---
 
-## 四、官方数据到位后第一件事
+## 四、去年真题数据画像（2026-08-01 评审实测；压测/超时/调参预算按此估）
 
-**先摸清数据格式，别急着训练**。确认三点后告诉维护者：
-1. 波形格式（mseed？）、采样率是否 100Hz；
-2. 真值标注：P/S 到时是"相对采样点"还是"绝对时间"，字段名；
-3. 一个波形样例 + 一条标注样例。
+两轮真题包已在手，"每条 51.5s"的旧假设不成立：
 
-然后把 `closed_loop.py` 里的合成数据加载换成真实加载器，**评分部分一行不动**，
-即可看到 PhaseNet 在真实广西数据上的**真实基线分**——一切提分（阈值、后处理、微调）从这里开始。
+1. **第1轮 1000 条**：单台站三分量，真值全部 1P+1S；时长 22~141s（150 条抽样
+   min=22.3 / med=64.0 / max=140.6s，仅约 41% 短于 diting 一窗 61.02s 需尾部补齐）。
+2. **第2轮 915 条**：时长 34.6s~**3600s**；含 3600s 大文件（单条约 70 倍计算量，
+   并发压测与超时预算必须覆盖）；其中 2 条密集余震文件（35P+34S / 53P+52S），
+   其余 913 条均为 1P+1S。
+3. 两轮答案均**无纯噪声条目**——今年规则明示会有（应返回空表），
+   噪声条目下的误报率只能用合成噪声波形抽查，去年真题测不出。
+
+真实基线已在手（diting 零微调，满分 2 分/文件）：新默认阈值 P=0.2/S=0.15 下
+第1轮 **1.717** / 第2轮 **1.654**（旧阈值 0.3 时为 1.629 / 1.500）。一切提分
+（微调、后处理）从这里起步，排期见 `训练与提分计划.md`。

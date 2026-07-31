@@ -28,6 +28,11 @@ from typing import Dict, List, Tuple
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from phasepicker.types import ExamTask, Task1Result  # noqa: E402
+from phasepicker.defaults import (  # noqa: E402
+    DEFAULT_P_THRESHOLD,
+    DEFAULT_PRETRAINED,
+    DEFAULT_S_THRESHOLD,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -46,6 +51,7 @@ def diff_results(
           "count_mismatch": [(file_id, "P", nA, nB), ...],
           "max_dt": 全局最大 |Δt|（对齐比较，仅数量一致的序列）,
           "max_dt_file": 出现处,
+          "n_aligned": 实际参与对齐比较的 pick 对数（0 = max_dt 无意义）,
           "over_tol": [(file_id, phase, dt), ...] 超容差的对齐差异,
           "same": 是否可判定等价,
         }
@@ -54,6 +60,7 @@ def diff_results(
     over_tol: List[Tuple[str, str, float]] = []
     max_dt = 0.0
     max_dt_file = ""
+    n_aligned = 0
     keys = sorted(set(a.keys()) | set(b.keys()))
     for fid in keys:
         ra = a.get(fid, Task1Result(file_id=fid))
@@ -63,6 +70,7 @@ def diff_results(
                 count_mismatch.append((fid, phase, len(ta), len(tb)))
                 continue
             for x, y in zip(sorted(ta), sorted(tb)):
+                n_aligned += 1
                 dt = abs(float(x) - float(y))
                 if dt > max_dt:
                     max_dt, max_dt_file = dt, f"{fid}:{phase}"
@@ -73,19 +81,27 @@ def diff_results(
         "count_mismatch": count_mismatch,
         "max_dt": max_dt,
         "max_dt_file": max_dt_file,
+        "n_aligned": n_aligned,
         "over_tol": over_tol,
         "same": not count_mismatch and not over_tol,
     }
 
 
+def format_max_dt_line(d: dict, tol: float) -> str:
+    """最大 |Δt| 行的展示：无可对齐样本时给 "—"，不打误导性的 0.0ms。"""
+    if not d.get("n_aligned"):
+        return "最大 |Δt| = —（无可对齐样本，数量全不一致或双方均无 pick）"
+    return f"最大 |Δt| = {d['max_dt']*1000:.1f}ms @ {d['max_dt_file'] or '-'}（容差 {tol*1000:.0f}ms）"
+
+
 def _parse_variant(spec: str):
-    """解析一套配置串（与 run_official_task1 的性能旋钮同名同义）。"""
+    """解析一套配置串（与 run_official_task1 的性能旋钮同名同义，默认同源 defaults）。"""
     ap = argparse.ArgumentParser(add_help=False)
     ap.add_argument("--weights", default=None)
-    ap.add_argument("--pretrained", default="stead")
+    ap.add_argument("--pretrained", default=DEFAULT_PRETRAINED)
     ap.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
-    ap.add_argument("--p-threshold", type=float, default=0.3)
-    ap.add_argument("--s-threshold", type=float, default=0.3)
+    ap.add_argument("--p-threshold", type=float, default=DEFAULT_P_THRESHOLD)
+    ap.add_argument("--s-threshold", type=float, default=DEFAULT_S_THRESHOLD)
     ap.add_argument("--overlap", type=float, default=0.5)
     ap.add_argument("--batch-size", type=int, default=256)
     ap.add_argument("--threads", type=int, default=None)
@@ -101,7 +117,12 @@ def _run_variant(tag: str, spec: str, samples, load_fn) -> Tuple[Dict[str, Task1
     from phasepicker.tasks.task1_runner import run_task1_samples_fast
 
     v = _parse_variant(spec)
-    print(f"[{tag}] 配置: {spec.strip() or '(全默认)'}")
+    # 横幅打印解析后的实际配置，防止"默认值以为是 A 实际是 B"
+    print(
+        f"[{tag}] 配置: {spec.strip() or '(全默认)'} → 基座={v.pretrained} "
+        f"权重={v.weights or '无(纯预训练)'} P阈值={v.p_threshold} "
+        f"S阈值={v.s_threshold} overlap={v.overlap}"
+    )
     picker = _make_picker(
         v.weights, v.device, v.p_threshold, v.s_threshold, v.pretrained,
         use_fp16=v.fp16, num_threads=v.threads, batch_size=v.batch_size,
@@ -144,7 +165,7 @@ def main(argv=None) -> int:
     d = diff_results(res_a, res_b, tol=args.tol)
     print("-" * 64)
     print(f"文件数 {d['n_files']}  加速比 A/B = ×{t_a/max(t_b,1e-9):.2f}")
-    print(f"最大 |Δt| = {d['max_dt']*1000:.1f}ms @ {d['max_dt_file'] or '-'}（容差 {args.tol*1000:.0f}ms）")
+    print(format_max_dt_line(d, args.tol))
     if d["count_mismatch"]:
         print(f"数量不一致 {len(d['count_mismatch'])} 处（最伤分！），示例：")
         for fid, ph, na, nb in d["count_mismatch"][:8]:

@@ -1,0 +1,66 @@
+# =============================================================================
+# 部署依赖锁（评审 C9）：云主机装的必须是本地彩排验证过的同一套版本。
+# 来源：Windows 本机已全绿验证环境（python 3.13, 2026-08-01 pip freeze 取
+# 运行时依赖闭包，剔除 Windows 专属包 colorama 等）。
+#
+# 关键决策：
+# - seisbench==0.12.2 —— 泄漏探针实测 0.11.4 与 0.12.2 泄漏完全相同
+#   (+3341 vs +3356 KB/call)且 picks 逐字节一致，故锁本地彩排过的 0.12.2。
+# - torch==2.12.1 —— deploy_api.sh 先走官方 CPU 轮子源单独安装（PEP 440:
+#   2.12.1+cpu 满足 ==2.12.1），失败回退清华源；本文件的 torch 行此时已满足，
+#   pip 会跳过，仅在环境里 torch 版本不对时兜底纠正。
+# - numpy 2.4.6 / scipy 1.18.0 要求 python >= 3.12（deploy_api.sh 有前置检查）。
+#
+# 改任何一行版本 = 部署环境偏离已验证基线，必须重跑真题冒烟后再上评测。
+# =============================================================================
+annotated-doc==0.0.4
+annotated-types==0.7.0
+anyio==4.13.0
+Bottleneck==1.6.0
+certifi==2026.5.20
+charset-normalizer==3.4.7
+click==8.4.1
+contourpy==1.3.3
+cycler==0.12.1
+decorator==5.3.1
+fastapi==0.138.0
+filelock==3.29.4
+fonttools==4.63.0
+fsspec==2026.4.0
+greenlet==3.5.1
+h11==0.16.0
+h5py==3.16.0
+idna==3.18
+Jinja2==3.1.6
+kiwisolver==1.5.0
+lxml==6.1.1
+MarkupSafe==3.0.3
+matplotlib==3.11.1
+mpmath==1.3.0
+nest-asyncio==1.6.0
+networkx==3.6.1
+numpy==2.4.6
+obspy==1.5.0
+packaging==26.2
+pandas==3.0.2
+pillow==12.2.0
+pydantic==2.13.4
+pydantic-core==2.46.4
+pyparsing==3.3.2
+python-dateutil==2.9.0.post0
+python-multipart==0.0.32
+requests==2.34.2
+scipy==1.18.0
+seisbench==0.12.2
+setuptools==81.0.0
+six==1.17.0
+SQLAlchemy==2.0.51
+starlette==1.3.1
+sympy==1.14.0
+torch==2.12.1
+tqdm==4.68.2
+typing-extensions==4.15.0
+typing-inspection==0.4.2
+tzdata==2026.2
+urllib3==2.7.0
+uvicorn==0.49.0

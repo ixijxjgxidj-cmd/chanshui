@@ -37,6 +37,24 @@ _PHASE_SCORING = {
     "S": (0.2, 2.0),
 }
 
+# ===== 数量罚读法模式 =====
+# 官方规则原文不在手上（sirenlingpai.doc 为空壳），"识别数量"按 P+S 合并还是
+# 分相位、"单项最低 0 分"截在文件还是全卷，均存在歧义且读法间会翻转
+# "多报一个假拾取"的净效应（合并按文件 +0.5 vs 分相位 -0.5）。四种读法都实现，
+# 默认保持项目历史口径以便与既有基线逐位可比。
+PENALTY_MODES = (
+    "merged_file_floor0",  # P+S 合并计数、按文件截 0（历史默认）
+    "per_phase_floor0",    # P/S 各自计数、各自截 0，文件分 = 两项之和
+    "merged_exam",         # 数量罚按全卷 P+S 合并计一次（聚合见 exam_total_score）
+    "per_phase_exam",      # 数量罚按全卷 P/S 分相位计（聚合见 exam_total_score）
+)
+DEFAULT_PENALTY_MODE = PENALTY_MODES[0]
+
+
+def _check_penalty_mode(penalty_mode: str) -> None:
+    if penalty_mode not in PENALTY_MODES:
+        raise ValueError(f"未知数量罚读法 {penalty_mode!r}，可选: {PENALTY_MODES}")
+
 
 def phase_time_score(residual_s: float, phase_type: str) -> float:
     """单个已匹配震相的到时得分（0~1），按官方线性递减规则。
@@ -171,17 +189,23 @@ class ScoreReport:
 def score_file(
     pred: Sequence[Tuple[str, float]],
     truth: Sequence[Tuple[str, float]],
+    penalty_mode: str = DEFAULT_PENALTY_MODE,
 ) -> ScoreReport:
     """对单个文件评分。
 
     Args:
         pred: 预测震相列表，每项 (phase_type, time_utc_seconds)。
         truth: 真值震相列表，每项 (phase_type, time_utc_seconds)。
+        penalty_mode: 数量罚读法，见 PENALTY_MODES。两个 *_exam 读法在文件层
+            不扣数量罚（count_penalty=0，total=到时分之和），罚由聚合器
+            exam_total_score 按全卷计数统一扣。
 
     Returns:
-        ScoreReport。到时总分 = 各已匹配震相得分之和；数量罚单独计算后从中扣除，
+        ScoreReport。到时总分 = 各已匹配震相得分之和；数量罚按读法计算后扣除，
         并 clip 到不小于 0（避免单文件出现负分干扰跨文件汇总口径）。
     """
+    _check_penalty_mode(penalty_mode)
+
     def _split(items: Sequence[Tuple[str, float]], t: str) -> List[float]:
         return [tt for pt, tt in items if pt == t]
 
@@ -194,11 +218,19 @@ def score_file(
     p_score = sum(phase_time_score(r, "P") for _, _, r in m_p.matched)
     s_score = sum(phase_time_score(r, "S") for _, _, r in m_s.matched)
 
-    n_pred = len(pred_p) + len(pred_s)
-    n_true = len(true_p) + len(true_s)
-    penalty = count_error_penalty(n_pred, n_true)
-
-    total = max(0.0, p_score + s_score - penalty)
+    if penalty_mode == "merged_file_floor0":
+        n_pred = len(pred_p) + len(pred_s)
+        n_true = len(true_p) + len(true_s)
+        penalty = count_error_penalty(n_pred, n_true)
+        total = max(0.0, p_score + s_score - penalty)
+    elif penalty_mode == "per_phase_floor0":
+        pen_p = count_error_penalty(len(pred_p), len(true_p))
+        pen_s = count_error_penalty(len(pred_s), len(true_s))
+        penalty = pen_p + pen_s
+        total = max(0.0, p_score - pen_p) + max(0.0, s_score - pen_s)
+    else:  # merged_exam / per_phase_exam：文件层只出到时分，数量罚在全卷聚合时扣
+        penalty = 0.0
+        total = p_score + s_score
 
     return ScoreReport(
         total_score=total,
@@ -214,3 +246,50 @@ def score_file(
         n_false_pos=len(m_p.unmatched_pred) + len(m_s.unmatched_pred),
         n_false_neg=len(m_p.unmatched_true) + len(m_s.unmatched_true),
     )
+
+
+def exam_total_score(
+    reports: Sequence[ScoreReport],
+    penalty_mode: str = DEFAULT_PENALTY_MODE,
+) -> Tuple[float, float]:
+    """按读法把逐文件报告聚合成 (卷面总分, 卷级数量罚)。
+
+    reports 必须由 score_file 以**同一个** penalty_mode 产出：
+    - 文件级读法(merged_file_floor0/per_phase_floor0)：罚已在各文件内扣掉，
+      这里只求和，卷级罚恒 0；
+    - merged_exam：全卷 P+S 合并计数扣一次罚，整卷截 0；
+    - per_phase_exam：全卷 P/S 各自计数各自扣罚、各自截 0。
+    """
+    _check_penalty_mode(penalty_mode)
+    # 注意：这里的求和全部用朴素 += 循环而非内置 sum()——Python 3.12 起 sum()
+    # 对浮点做补偿求和，最后一位会与历史逐文件累加口径不一致，破坏基线逐位可比。
+    if penalty_mode in ("merged_file_floor0", "per_phase_floor0"):
+        total = 0.0
+        for r in reports:
+            total += r.total_score
+        return total, 0.0
+    if penalty_mode == "merged_exam":
+        n_pred = 0
+        n_true = 0
+        time_sum = 0.0
+        for r in reports:
+            n_pred += r.n_pred_p + r.n_pred_s
+            n_true += r.n_true_p + r.n_true_s
+            time_sum += r.p_time_score + r.s_time_score
+        pen = count_error_penalty(n_pred, n_true)
+        return max(0.0, time_sum - pen), pen
+    # per_phase_exam
+    n_pred_p = n_true_p = n_pred_s = n_true_s = 0
+    p_sum = 0.0
+    s_sum = 0.0
+    for r in reports:
+        n_pred_p += r.n_pred_p
+        n_true_p += r.n_true_p
+        n_pred_s += r.n_pred_s
+        n_true_s += r.n_true_s
+        p_sum += r.p_time_score
+        s_sum += r.s_time_score
+    pen_p = count_error_penalty(n_pred_p, n_true_p)
+    pen_s = count_error_penalty(n_pred_s, n_true_s)
+    total = max(0.0, p_sum - pen_p) + max(0.0, s_sum - pen_s)
+    return total, pen_p + pen_s

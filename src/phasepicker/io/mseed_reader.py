@@ -6,8 +6,9 @@
 
 设计目标（对应赛题"数据处理模块"）：
 1. 读取三分量 mseed，做基本校验：分量完整性、采样率、时间连续性。
-2. 对异常数据（缺分量、非标准采样率、超短/超长波形、多台站混合）明确容错，
-   任何异常都以"跳过该台站 + 结构化告警"收场，绝不让进程崩溃。
+2. 对异常数据（缺分量、非标准采样率、超短/超长波形、多台站混合）明确容错：
+   缺分量以零填充降级继续推理（保留台站），其余不可恢复异常以"跳过该台站 +
+   结构化告警"收场，绝不让进程崩溃。
 3. 输出统一的 Waveform 列表（每台站一个），通道顺序固定 [Z, N, E]。
 
 容错哲学：**宁可跳过一个台站，也不让整个请求挂掉。** 每个可预见的异常都
@@ -38,9 +39,10 @@ except Exception:  # pragma: no cover - 环境相关
 # 允许的采样率白名单（Hz）。非白名单会被重采样到 TARGET_RATE。
 # 100Hz 是 SeisBench PhaseNet/EQTransformer 的原生采样率。
 TARGET_RATE = 100.0
-# 波形时长的合理边界（秒）。超短无法给模型足够上下文；超长做切窗（此处仅告警，
-# 切窗在 preprocess 里做）。上界同时是"超时防护"的第一道闸——限制输入长度，
-# 比指望中途 kill 正在跑的推理更可靠。
+# 波形时长的合理边界（秒）。超短无法给模型足够上下文；超长仅告警不截断——
+# 长波形由 seisbench annotate 原生滑窗直接处理（serve_api 链路不调用
+# preprocess；实测第2轮 3600s 文件可正常滑窗出结果）。上界同时是"超时防护"
+# 的第一道闸——限制输入长度，比指望中途 kill 正在跑的推理更可靠。
 MIN_DURATION_S = 5.0
 MAX_DURATION_S = 3600.0
 
@@ -141,25 +143,38 @@ def build_waveform(
             continue
         by_comp.setdefault(comp, []).append(tr)
 
-    # 2) 分量完整性校验
-    missing = [c for c in CHANNEL_ORDER if c not in by_comp]
-    if missing:
-        result.add_warning(
-            station, "missing_component", f"缺少分量 {missing}；仅 {list(by_comp)}"
-        )
+    # 2) 分量完整性检查：只要还有 ≥1 个可用分量就继续（缺失行稍后零填充），
+    #    完全无分量才丢台站——单个死道不该让整站 P/S 全部弃权（评审 U4/U20：
+    #    分量置零的退化输入 PhaseNet 仍能给出接近满分的 P/S）。
+    if not by_comp:
+        result.add_warning(station, "missing_component", "无任何可识别分量")
         return None
 
-    # 3) 每个分量合并多段 + 采样率一致性
+    # 3) 每个在场分量合并多段 + 采样率一致性；合并失败/合并后为空的分量
+    #    降级视同缺失（零填充），而不是丢整站
     merged: dict = {}
     rates = set()
     for comp in CHANNEL_ORDER:
+        if comp not in by_comp:
+            continue
         st = _merge_gappy(by_comp[comp], station, result)
         if st is None or len(st) == 0:
             result.add_warning(station, "empty_after_merge", comp)
-            return None
+            continue
         tr = st[0]
         merged[comp] = tr
         rates.add(round(float(tr.stats.sampling_rate), 6))
+
+    if not merged:
+        result.add_warning(station, "missing_component", "全部分量合并失败")
+        return None
+    zero_fill = [c for c in CHANNEL_ORDER if c not in merged]
+    if zero_fill:
+        result.add_warning(
+            station,
+            "missing_component_zero_filled",
+            f"缺失分量 {zero_fill} 以零填充降级推理；可用 {list(merged)}",
+        )
 
     if len(rates) > 1:
         result.add_warning(station, "inconsistent_sampling_rate", f"{rates}")
@@ -169,33 +184,40 @@ def build_waveform(
         result.add_warning(station, "nonpositive_sampling_rate", str(sampling_rate))
         return None
 
-    # 4) 三分量对齐到公共时间窗（取交集），保证 (3, n) 严格同长且同起点
-    starts = [merged[c].stats.starttime for c in CHANNEL_ORDER]
-    ends = [merged[c].stats.endtime for c in CHANNEL_ORDER]
+    # 4) 在场分量对齐到公共时间窗（取交集），保证各行严格同长且同起点
+    starts = [merged[c].stats.starttime for c in merged]
+    ends = [merged[c].stats.endtime for c in merged]
     common_start = max(starts)
     common_end = min(ends)
     if common_end <= common_start:
-        result.add_warning(station, "no_time_overlap", "三分量时间窗无交集")
+        result.add_warning(station, "no_time_overlap", "分量时间窗无交集")
         return None
 
-    arrays = []
-    for c in CHANNEL_ORDER:
+    arrays: dict = {}
+    for c in merged:
         tr = merged[c].copy()
         try:
             tr.trim(common_start, common_end, pad=False)
         except Exception as exc:  # noqa: BLE001
             result.add_warning(station, "trim_failed", f"{c}: {exc}")
             return None
-        arrays.append(np.asarray(tr.data, dtype=np.float32))
+        arrays[c] = np.asarray(tr.data, dtype=np.float32)
 
-    # 5) 长度对齐（trim 后可能差 1 个采样点，取最短，保证矩阵规整）
-    n = min(a.shape[0] for a in arrays)
+    # 5) 长度对齐（trim 后可能差 1 个采样点，取最短，保证矩阵规整）；
+    #    缺失分量补同长零行——采样率与起始时间不变，到时换算不受影响
+    n = min(a.shape[0] for a in arrays.values())
     if n <= 0:
         result.add_warning(station, "empty_data", "trim 后无采样点")
         return None
-    data = np.stack([a[:n] for a in arrays], axis=0)  # (3, n) = [Z, N, E]
+    data = np.stack(
+        [
+            arrays[c][:n] if c in arrays else np.zeros(n, dtype=np.float32)
+            for c in CHANNEL_ORDER
+        ],
+        axis=0,
+    )  # (3, n) = [Z, N, E]
 
-    # 6) 时长边界校验（超短拒绝；超长仅告警，交给预处理切窗）
+    # 6) 时长边界校验（超短拒绝；超长仅告警，annotate 原生滑窗可处理）
     duration = n / sampling_rate
     if duration < MIN_DURATION_S:
         result.add_warning(
@@ -204,7 +226,7 @@ def build_waveform(
         return None
     if duration > MAX_DURATION_S:
         result.add_warning(
-            station, "too_long", f"{duration:.2f}s > {MAX_DURATION_S}s（将切窗处理）"
+            station, "too_long", f"{duration:.2f}s > {MAX_DURATION_S}s（annotate 滑窗处理）"
         )
 
     starttime_utc = float(common_start.timestamp)  # UTCDateTime -> epoch 秒

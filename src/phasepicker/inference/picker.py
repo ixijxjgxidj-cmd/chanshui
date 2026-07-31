@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional
@@ -25,6 +26,20 @@ import numpy as np
 from ..types import Pick, PhaseType, Waveform, CHANNEL_ORDER
 from ..utils.timing import sample_to_utc
 from ..postprocess.dedup import dedup_picks, DedupConfig
+from ..defaults import (
+    DEFAULT_PRETRAINED,
+    DEFAULT_P_MERGE_WINDOW_S,
+    DEFAULT_P_THRESHOLD,
+    DEFAULT_S_MERGE_WINDOW_S,
+    DEFAULT_S_THRESHOLD,
+)
+
+logger = logging.getLogger(__name__)
+
+# 末端护栏容差（秒）：_to_stream 会把短波形尾部边缘复制补齐到模型窗长，
+# 补齐区触发的 pick 到时落在真实数据末尾之后，必然是错的（真值都在文件内），
+# 上报即吃数量罚。超过"真实末尾 + 容差"的 pick 一律丢弃；容差吸收重采样取整。
+END_GUARD_TOLERANCE_S = 0.5
 
 
 @dataclass
@@ -49,19 +64,25 @@ class PickerConfig:
             torch 有时探测不到全部核心，显式设满核常有 2~4 倍差距。
         compile_model: 试用 torch.compile 加速（PyTorch 2.x）。首次调用有编译
             开销、老显卡（如 sm_61）可能不支持，失败会自动回退不报错。
+        p_merge_window_s: P 波去重合并窗口（秒）。None = 用 defaults.py 全局默认。
+        s_merge_window_s: S 波去重合并窗口（秒）。None = 用 defaults.py 全局默认。
+            这两个是 P3 网格产物接入部署的管道：调参结论只需改 defaults.py
+            或在构造 PickerConfig 时显式传值，无需再手工拼 DedupConfig。
     """
 
     model_name: str = "PhaseNet"
-    pretrained: str = "original"
+    pretrained: str = DEFAULT_PRETRAINED
     device: Optional[str] = None
-    p_threshold: float = 0.3
-    s_threshold: float = 0.3
+    p_threshold: float = DEFAULT_P_THRESHOLD
+    s_threshold: float = DEFAULT_S_THRESHOLD
     batch_size: int = 256
     overlap: float = 0.5
     local_weights_path: Optional[str] = None
     use_fp16: bool = False
     num_threads: Optional[int] = None
     compile_model: bool = False
+    p_merge_window_s: Optional[float] = None
+    s_merge_window_s: Optional[float] = None
 
 
 class BasePicker(ABC):
@@ -90,10 +111,27 @@ class SeisBenchPicker(BasePicker):
     """基于 SeisBench 的默认拾取器。"""
 
     def __init__(self, model, cfg: PickerConfig, dedup_cfg: Optional[DedupConfig] = None):
-        """通常不直接用构造函数，用 ``SeisBenchPicker.from_config(cfg)``。"""
+        """通常不直接用构造函数，用 ``SeisBenchPicker.from_config(cfg)``。
+
+        显式传入的 dedup_cfg 优先级最高；未传时由 cfg 的合并窗字段构造，
+        字段为 None 再落到 defaults.py 的全局默认。
+        """
         self._model = model
         self._cfg = cfg
-        self._dedup_cfg = dedup_cfg or DedupConfig()
+        if dedup_cfg is None:
+            dedup_cfg = DedupConfig(
+                p_merge_window_s=(
+                    cfg.p_merge_window_s
+                    if cfg.p_merge_window_s is not None
+                    else DEFAULT_P_MERGE_WINDOW_S
+                ),
+                s_merge_window_s=(
+                    cfg.s_merge_window_s
+                    if cfg.s_merge_window_s is not None
+                    else DEFAULT_S_MERGE_WINDOW_S
+                ),
+            )
+        self._dedup_cfg = dedup_cfg
 
     @classmethod
     def from_config(cls, cfg: PickerConfig, dedup_cfg: Optional[DedupConfig] = None) -> "SeisBenchPicker":
@@ -191,6 +229,11 @@ class SeisBenchPicker(BasePicker):
         except Exception:  # noqa: BLE001
             return "cpu"
 
+    @staticmethod
+    def _end_guard_utc(wf: Waveform) -> float:
+        """该波形允许的 pick 到时上限：真实数据末尾 + 容差（epoch 秒）。"""
+        return wf.starttime_utc + wf.n_samples / wf.sampling_rate + END_GUARD_TOLERANCE_S
+
     def pick(self, wf: Waveform) -> List[Pick]:
         """对单台站波形做拾取。
 
@@ -204,6 +247,7 @@ class SeisBenchPicker(BasePicker):
         # 用官方 API 而非自己挑峰，避免重复造轮子且行为与 SeisBench 一致。
         outputs = self._classify(stream)
 
+        end_guard = self._end_guard_utc(wf)
         picks: List[Pick] = []
         for p in getattr(outputs, "picks", outputs):
             phase = self._normalize_phase(p.phase)
@@ -213,6 +257,14 @@ class SeisBenchPicker(BasePicker):
             # 直接取其 epoch 秒，与内部 time_utc 约定一致；不经过手动采样点换算，
             # 消除一次潜在的对齐误差来源。
             time_utc = float(p.peak_time.timestamp)
+            if time_utc > end_guard:
+                logger.warning(
+                    "丢弃末端护栏外 pick [%s] phase=%s 超出真实数据末尾 %.3fs",
+                    wf.station,
+                    phase.value,
+                    time_utc - (end_guard - END_GUARD_TOLERANCE_S),
+                )
+                continue
             picks.append(
                 Pick(
                     phase=phase,
@@ -253,6 +305,8 @@ class SeisBenchPicker(BasePicker):
 
         outputs = self._classify(stream)
 
+        # 末端护栏按 per-wf 各自的真实数据末尾判定（各波形长度不同）
+        end_guards = [self._end_guard_utc(wf) for wf in wfs]
         per_wf: List[List[Pick]] = [[] for _ in wfs]
         for p in getattr(outputs, "picks", outputs):
             phase = self._normalize_phase(p.phase)
@@ -267,10 +321,19 @@ class SeisBenchPicker(BasePicker):
                     f"pick_batch 无法把 trace_id={trace_id!r} 映射回输入波形；"
                     "请回退逐条 pick() 路径"
                 )
+            time_utc = float(p.peak_time.timestamp)
+            if time_utc > end_guards[idx]:
+                logger.warning(
+                    "丢弃末端护栏外 pick [%s] phase=%s 超出真实数据末尾 %.3fs",
+                    wfs[idx].station,
+                    phase.value,
+                    time_utc - (end_guards[idx] - END_GUARD_TOLERANCE_S),
+                )
+                continue
             per_wf[idx].append(
                 Pick(
                     phase=phase,
-                    time_utc=float(p.peak_time.timestamp),
+                    time_utc=time_utc,
                     confidence=float(getattr(p, "peak_value", 0.0)),
                     station=wfs[idx].station,
                 )

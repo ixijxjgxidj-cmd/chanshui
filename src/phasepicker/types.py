@@ -145,11 +145,18 @@ class Task1Result:
 
     第1轮每文件恰好一个 P 和一个 S；第2轮允许多个。用列表统一承载两种情形，
     单值场景就是长度为 1 的列表，避免下游分叉。
+
+    p_confidences / s_confidences 是与到时列表**下标对齐**的模型置信度（可选）。
+    答案解析等来源没有置信度时保持空列表；两个字段 compare=False——密集余震
+    场景的后处理（评审 U17）需要置信度，但它不参与结果相等性，旧代码对
+    Task1Result 的构造/比较/写出（T1.an 只含到时）一概不受影响。
     """
 
     file_id: str
     p_times_s: List[float] = field(default_factory=list)
     s_times_s: List[float] = field(default_factory=list)
+    p_confidences: List[float] = field(default_factory=list, compare=False)
+    s_confidences: List[float] = field(default_factory=list, compare=False)
 
 
 @dataclass
