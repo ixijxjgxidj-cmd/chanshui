@@ -48,6 +48,27 @@ class BaselineModelBundle:
             return None
         return self.estimator.predict_proba(x)[0]
 
+    def _validate_matrix(self, X) -> np.ndarray:
+        x = np.asarray(X, dtype=np.float64)
+        if x.ndim == 1:
+            x = x.reshape(1, -1)
+        if self.feature_names != list(FEATURE_NAMES):
+            raise ValueError("模型特征版本与当前代码不一致，请重新训练模型")
+        if x.shape[1] != len(self.feature_names):
+            raise ValueError(f"模型需要 {len(self.feature_names)} 个特征，实际得到 {x.shape[1]}")
+        return x
+
+    def predict_many(self, X) -> np.ndarray:
+        """整批预测。树模型（ExtraTrees 等）单次矩阵调用远快于逐样本循环：
+        每次 predict 都要遍历全部几百棵树，固定开销 × N 样本是纯浪费。"""
+        return np.asarray(self.estimator.predict(self._validate_matrix(X)))
+
+    def predict_proba_many(self, X):
+        """整批类别概率；估计器不支持时返回 None。"""
+        if not hasattr(self.estimator, "predict_proba"):
+            return None
+        return np.asarray(self.estimator.predict_proba(self._validate_matrix(X)))
+
 
 def train_magnitude_baseline(X, y, random_state: int = 42) -> BaselineModelBundle:
     """训练 ExtraTrees 震级回归基线。"""

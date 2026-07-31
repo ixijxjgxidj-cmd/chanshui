@@ -37,8 +37,10 @@ echo "SEISBENCH_CACHE_ROOT=$CACHE"
 
 echo "==================== [3/5] 安装 seisbench + obspy ===================="
 # torch 已由镜像内置, 不要动; 只装缺的. 用清华镜像加速.
+# seisbench>=0.11 必须: annotate/classify 后端已重写(核心瓶颈函数 C 实现),
+# CPU 提速>=20%、GPU>50%; torch>=1.10 即可满足, 与 P4 镜像的 2.0.1 兼容.
 python -m pip install --root-user-action=ignore \
-  -i https://pypi.tuna.tsinghua.edu.cn/simple seisbench obspy
+  -i https://pypi.tuna.tsinghua.edu.cn/simple "seisbench>=0.11" obspy
 
 echo "==================== [4/5] 恢复预训练权重 (免跨境重下) ===================="
 if [ -f "$WEIGHT_BACKUP" ]; then

@@ -347,6 +347,12 @@ def main():
     ap.add_argument("--sr", type=float, default=100.0)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--resume", action="store_true", help="从上次 checkpoint 断点续训")
+    ap.add_argument("--pretrained", default="stead",
+                    help="SeisBench 预训练权重名。比赛强烈建议 'diting'——"
+                         "USTC 用 270 万条中国 DiTing 数据训出的 PhaseNet，域最接近广西赛题")
+    ap.add_argument("--init-weights", default="",
+                    help="可选：本地权重(.pt)作为微调起点（如 USTC-Pickers 的省级 picker），"
+                         "在 --pretrained 骨架上覆盖加载")
     args = ap.parse_args()
 
     import torch
@@ -355,8 +361,21 @@ def main():
 
     torch.manual_seed(args.seed); np.random.seed(args.seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print("==== 加载预训练 PhaseNet(stead) ====")
-    model = sbm.PhaseNet.from_pretrained("stead").to(device)
+    print("==== 加载预训练 PhaseNet(%s) ====" % args.pretrained)
+    model = sbm.PhaseNet.from_pretrained(args.pretrained).to(device)
+    if args.init_weights:
+        print("==== 覆盖加载本地起点权重: %s ====" % args.init_weights)
+        try:
+            ckpt = torch.load(args.init_weights, map_location=device, weights_only=False)
+        except TypeError:  # 老 torch 无 weights_only
+            ckpt = torch.load(args.init_weights, map_location=device)
+        state = ckpt
+        if isinstance(ckpt, dict):
+            for k in ("model", "model_state_dict", "state_dict"):
+                if k in ckpt:
+                    state = ckpt[k]
+                    break
+        model.load_state_dict(state)
     label_order = list(getattr(model, "labels", ["P","S","N"]))
     print("设备=%s | 模型输出通道顺序=%s" % (device, label_order))
 

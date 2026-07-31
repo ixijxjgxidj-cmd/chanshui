@@ -30,7 +30,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from phasepicker.types import ExamSample, ExamTask, Waveform  # noqa: E402
 from phasepicker.io.official_exam import scan_exam_input  # noqa: E402
 from phasepicker.io.submission_writer import write_task1_results  # noqa: E402
-from phasepicker.tasks.task1_runner import run_task1_samples  # noqa: E402
+from phasepicker.tasks.task1_runner import (  # noqa: E402
+    run_task1_samples,
+    run_task1_samples_fast,
+)
 
 
 def _read_sample_bytes(sample: ExamSample) -> bytes:
@@ -75,6 +78,11 @@ def _make_picker(
     p_threshold: float,
     s_threshold: float,
     pretrained: str,
+    use_fp16: bool = False,
+    num_threads: int | None = None,
+    batch_size: int = 256,
+    overlap: float = 0.5,
+    compile_model: bool = False,
 ):
     """按参数构建 SeisBenchPicker；torch/seisbench 缺失时给清晰报错。"""
     try:
@@ -83,11 +91,16 @@ def _make_picker(
         raise SystemExit(f"构建 picker 失败（import 阶段）：{exc!r}")
 
     cfg = PickerConfig(
-        device=device,
+        device=None if device == "auto" else device,
         pretrained=pretrained,
         p_threshold=p_threshold,
         s_threshold=s_threshold,
         local_weights_path=weights,
+        use_fp16=use_fp16,
+        num_threads=num_threads,
+        batch_size=batch_size,
+        overlap=overlap,
+        compile_model=compile_model,
     )
     try:
         return SeisBenchPicker.from_config(cfg)
@@ -107,15 +120,32 @@ def main(argv=None) -> int:
     ap.add_argument("--weights", default=None, help="可选：本地微调权重 (.pt) 路径")
     ap.add_argument("--pretrained", default="stead",
                     help="SeisBench 基础权重名；默认 stead（本地微调权重也按此结构加载）")
-    ap.add_argument("--device", default="cpu", choices=["cpu", "cuda"], help="推理设备")
+    ap.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"],
+                    help="推理设备；默认 auto（有 CUDA 用 CUDA，否则 CPU）")
     ap.add_argument("--p-threshold", type=float, default=0.3, help="P 波触发概率阈值")
     ap.add_argument("--s-threshold", type=float, default=0.3, help="S 波触发概率阈值")
-    ap.add_argument("--prefix", default="", help="写出行的路径前缀（如 exam2025/TASK01/）")
+    ap.add_argument("--prefix", default="./T1-Q/",
+                    help="写出行的路径前缀；默认第2轮官方风格 ./T1-Q/（第1轮传 exam2025/TASK01/）")
     ap.add_argument("--answer", default=None, help="可选：官方答案文件，提供则跑 official_eval 打分")
     ap.add_argument("--answer-package", default=None,
                     help="可选：直接从官方 zip（含嵌套 zip）读取 T1 答案并打分")
     ap.add_argument("--limit", type=int, default=None,
                     help="仅调试：只跑前 N 个 T1 文件；正式提交不要设置")
+    # ---- 性能相关 ----
+    ap.add_argument("--workers", type=int, default=min(8, os.cpu_count() or 1),
+                    help="读 mseed 的 I/O 线程数（与推理重叠）")
+    ap.add_argument("--file-batch", type=int, default=16,
+                    help="合批推理的文件窗口大小；1=逐文件推理")
+    ap.add_argument("--batch-size", type=int, default=256,
+                    help="SeisBench 滑窗 batch 大小（显存富余可加大）")
+    ap.add_argument("--threads", type=int, default=None,
+                    help="CPU 推理线程数；默认自动取满核")
+    ap.add_argument("--fp16", action="store_true",
+                    help="CUDA 半精度推理（提速；先用本地评分验证同分再用于正式提交）")
+    ap.add_argument("--no-fast", action="store_true",
+                    help="禁用流水线/合批优化，回退原始顺序实现（排查对比用）")
+    ap.add_argument("--no-validate", action="store_true",
+                    help="跳过写出后的提交文件回读自检")
     args = ap.parse_args(argv)
 
     # 1) 扫描输入并过滤出 T1 样本
@@ -137,10 +167,42 @@ def main(argv=None) -> int:
         args.p_threshold,
         args.s_threshold,
         args.pretrained,
+        use_fp16=args.fp16,
+        num_threads=args.threads,
+        batch_size=args.batch_size,
     )
 
     # 3) 端到端推理 → 相对秒 Task1Result
-    results_map = run_task1_samples(samples, load_waveforms_fn, picker)
+    import time
+
+    t0 = time.perf_counter()
+    if args.no_fast:
+        results_map = run_task1_samples(samples, load_waveforms_fn, picker)
+    else:
+        last_print = [0.0]
+
+        def _progress(done: int, total: int) -> None:
+            now = time.perf_counter()
+            if done == total or now - last_print[0] >= 2.0:
+                last_print[0] = now
+                rate = done / max(1e-9, now - t0)
+                eta = (total - done) / max(1e-9, rate)
+                print(
+                    f"\r进度 {done}/{total}  {rate:.1f} 文件/秒  剩余约 {eta:.0f}s",
+                    end="" if done < total else "\n",
+                    flush=True,
+                )
+
+        results_map = run_task1_samples_fast(
+            samples,
+            load_waveforms_fn,
+            picker,
+            io_workers=args.workers,
+            file_batch=args.file_batch,
+            progress_cb=_progress,
+        )
+    elapsed = time.perf_counter() - t0
+    print(f"推理完成：{len(samples)} 文件，{elapsed:.1f}s（{len(samples)/max(1e-9,elapsed):.2f} 文件/秒）")
 
     # 4) 写出（保持输入扫描顺序，便于复现）
     ordered = [results_map[s.file_id] for s in samples if s.file_id in results_map]
@@ -148,6 +210,23 @@ def main(argv=None) -> int:
     n_p = sum(len(r.p_times_s) for r in ordered)
     n_s = sum(len(r.s_times_s) for r in ordered)
     print(f"已写出 {len(ordered)} 行到 {args.output}（P 到时 {n_p} 个，S 到时 {n_s} 个）")
+
+    # 4.5) 提交文件回读自检：写出的每一行都必须能被官方格式 parser 原样读回
+    if not args.no_validate:
+        from phasepicker.io.official_answers import parse_task1_answer_lines
+
+        with open(args.output, "r", encoding="utf-8") as f:
+            reparsed = parse_task1_answer_lines(f.read().splitlines())
+        rp = sum(len(r.p_times_s) for r in reparsed.values())
+        rs = sum(len(r.s_times_s) for r in reparsed.values())
+        if len(reparsed) != len(ordered) or rp != n_p or rs != n_s:
+            print(
+                f"[自检失败] 回读 {len(reparsed)} 行/P{rp}/S{rs}，"
+                f"期望 {len(ordered)} 行/P{n_p}/S{n_s} —— 请检查输出格式！",
+                file=sys.stderr,
+            )
+            return 3
+        print("输出自检通过：行数与 P/S 数量回读一致，格式符合官方标准")
 
     # 5) 可选打分
     if args.answer and args.answer_package:

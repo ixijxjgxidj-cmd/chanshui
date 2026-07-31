@@ -22,7 +22,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable, Dict, Iterable, List, Sequence, Union
+from concurrent.futures import ThreadPoolExecutor
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 from ..types import ExamSample, PhaseType, Pick, Task1Result, Waveform
 
@@ -169,4 +170,166 @@ def run_task1_samples(
             for wf in waveforms
         ]
         results[file_id] = _merge_task1_results(file_id, parts)
+    return results
+
+
+# =========================================================================
+# 高速流水线 runner（run_task1_samples 的提速版，结果语义完全一致）
+# =========================================================================
+# 提速三板斧：
+#   1. I/O 预取：读 mseed（解压 + ObsPy 解析）交给线程池，与推理重叠进行；
+#      有界预取窗口，内存不随样本总数增长。
+#   2. 跨文件合批：把一段窗口内多个文件的所有波形拼成一批，走 picker.pick_batch
+#      单次 classify —— 滑窗张量凑满 batch，硬件不空转。
+#   3. 失败隔离不变：单文件读失败/推理失败仍是"空结果 + warning"；
+#      合批整体失败自动回退逐条 pick()，最坏情况等价于原顺序版。
+
+
+def _load_one(
+    sample: ExamSample,
+    load_waveforms_fn: LoadWaveformsFn,
+) -> Tuple[ExamSample, Optional[Sequence[Waveform]], Optional[Exception]]:
+    """线程池工作单元：读一个样本的波形；异常收进返回值，绝不外泄。"""
+    try:
+        return sample, load_waveforms_fn(sample), None
+    except Exception as exc:  # noqa: BLE001
+        return sample, None, exc
+
+
+def _pick_chunk(
+    chunk: List[Tuple[str, Sequence[Waveform]]],
+    picker,
+) -> Dict[str, Task1Result]:
+    """对一段窗口内的 (file_id, waveforms) 批量推理，映射回各文件结果。
+
+    优先走 picker.pick_batch（单次 classify 合批）；批路径抛错则整段回退
+    逐条 pick_waveform_to_task1_result（其内部已有单文件失败隔离）。
+    """
+    out: Dict[str, Task1Result] = {}
+    flat: List[Waveform] = []
+    owner: List[str] = []  # flat[i] 属于哪个 file_id
+    for file_id, wfs in chunk:
+        for wf in wfs:
+            flat.append(wf)
+            owner.append(file_id)
+
+    picks_per_wf: Optional[List[List[Pick]]] = None
+    if flat and hasattr(picker, "pick_batch"):
+        try:
+            picks_per_wf = picker.pick_batch(flat)
+            if len(picks_per_wf) != len(flat):
+                raise RuntimeError(
+                    f"pick_batch 返回 {len(picks_per_wf)} 组，期望 {len(flat)} 组"
+                )
+        except Exception as exc:  # noqa: BLE001 —— 合批失败整段回退，不丢文件
+            logger.warning("pick_batch 失败（%r），回退逐条推理", exc)
+            picks_per_wf = None
+
+    if picks_per_wf is None:
+        parts_by_file: Dict[str, List[Task1Result]] = {}
+        for file_id, wfs in chunk:
+            parts_by_file[file_id] = [
+                pick_waveform_to_task1_result(file_id, wf, picker) for wf in wfs
+            ]
+        for file_id, _ in chunk:
+            out[file_id] = _merge_task1_results(file_id, parts_by_file[file_id])
+        return out
+
+    parts_map: Dict[str, List[Task1Result]] = {fid: [] for fid, _ in chunk}
+    for wf, file_id, picks in zip(flat, owner, picks_per_wf):
+        parts_map[file_id].append(
+            picks_to_task1_result(file_id, picks, wf.starttime_utc)
+        )
+    for file_id, _ in chunk:
+        out[file_id] = _merge_task1_results(file_id, parts_map[file_id])
+    return out
+
+
+def run_task1_samples_fast(
+    samples: Iterable[ExamSample],
+    load_waveforms_fn: LoadWaveformsFn,
+    picker,
+    io_workers: int = 4,
+    file_batch: int = 16,
+    progress_cb: Optional[Callable[[int, int], None]] = None,
+) -> Dict[str, Task1Result]:
+    """run_task1_samples 的高速版：I/O 预取 + 跨文件合批推理。
+
+    与顺序版的结果字典**逐字段一致**（相同 picker 参数下），仅执行方式不同；
+    单元测试以顺序版为基准做等价性校验。
+
+    Args:
+        samples: 待处理样本。
+        load_waveforms_fn: 读波形函数（线程安全；官方 zip 读取配合归档缓存
+            official_waveforms.read_source_bytes 时天然线程安全）。
+        picker: 拾取器；实现 pick_batch 时走合批快路径，否则逐条。
+        io_workers: 读波形线程数。
+        file_batch: 每次合批的文件数窗口。1 = 不合批（仍有 I/O 预取收益）。
+        progress_cb: 可选进度回调 ``cb(done, total)``。
+
+    Returns:
+        {file_id: Task1Result}，键集合与输入样本一致。
+    """
+    sample_list = list(samples)
+    total = len(sample_list)
+    results: Dict[str, Task1Result] = {}
+    if not sample_list:
+        return results
+
+    io_workers = max(1, int(io_workers))
+    file_batch = max(1, int(file_batch))
+    done = 0
+
+    def _report(n: int) -> None:
+        nonlocal done
+        done += n
+        if progress_cb is not None:
+            progress_cb(done, total)
+
+    with ThreadPoolExecutor(max_workers=io_workers, thread_name_prefix="t1io") as pool:
+        # 有界预取：滚动提交，飞行中的加载任务不超过 window 个
+        window = max(file_batch * 2, io_workers * 2)
+        futures = []
+        next_submit = 0
+
+        def _top_up() -> None:
+            nonlocal next_submit
+            while next_submit < total and len(futures) < window:
+                futures.append(
+                    pool.submit(_load_one, sample_list[next_submit], load_waveforms_fn)
+                )
+                next_submit += 1
+
+        _top_up()
+        chunk: List[Tuple[str, Sequence[Waveform]]] = []
+        while futures:
+            sample, waveforms, err = futures.pop(0).result()
+            _top_up()
+            file_id = sample.file_id
+
+            if err is not None:
+                logger.warning(
+                    "读取波形失败 [%s]（来源 %s）：%r", file_id, sample.source_path, err
+                )
+                results[file_id] = Task1Result(file_id=file_id)
+                _report(1)
+                continue
+            if not waveforms:
+                logger.warning(
+                    "波形为空 [%s]（来源 %s）：返回空 P/S", file_id, sample.source_path
+                )
+                results[file_id] = Task1Result(file_id=file_id)
+                _report(1)
+                continue
+
+            chunk.append((file_id, waveforms))
+            if len(chunk) >= file_batch:
+                results.update(_pick_chunk(chunk, picker))
+                _report(len(chunk))
+                chunk = []
+
+        if chunk:
+            results.update(_pick_chunk(chunk, picker))
+            _report(len(chunk))
+
     return results

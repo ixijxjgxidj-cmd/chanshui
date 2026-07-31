@@ -6,6 +6,67 @@
 
 ---
 
+## ⚡ 2026 官方标准（第二届"震智杯"，以《比赛说明》PPT 为准）
+
+**提交方式已从"上传 .an 文件"改为"公网 HTTP API"**：
+
+- 评测方 `requests.post(url, files=files)` 上传 .mseed；
+- 响应必须是 JSON：`{"台站名": {"P": ["2025-06-07T12:34:56.789000Z", ...], "S": [...]}}`
+  （绝对 UTC 到时，微秒 6 位 + `Z` 后缀）；
+- 评分：P ≤0.1s 得 1 分、0.1–1s 线性、>1s 不计分；S ≤0.2s 满分 / 0.2–2s 线性；
+  数量误差 >5% 每超 1 个扣 0.5 分；单项最低 0 分。输入 100Hz、无位置信息、含纯噪声条目。
+
+对应入口：
+
+```bash
+# 起官方标准 API（模型常驻 + 预热 + 多台站合批推理）
+pip install fastapi uvicorn python-multipart requests
+python scripts/serve_api.py --pretrained stead --port 8000          # 保底（零微调）
+python scripts/serve_api.py --weights weights/phasenet_ft.pt --port 8000  # 微调权重
+
+# 提交前自检：状态码 / JSON 结构 / ISO 到时格式 / 升序，全对才算过
+python scripts/check_api.py --url http://<公网IP>:8000/pick --input <mseed目录或zip>
+```
+
+去年格式的 `.an` 工具链（run_official_task1/23、本地评分）完整保留，
+用于在**去年真题包上离线验证模型分数**——这是唯一可靠的调参依据。
+训练与提分排期见 `训练与提分计划.md`。
+
+## 🚀 性能（极限优化，输出与优化前逐字段一致）
+
+| 优化 | 位置 | 效果 |
+|---|---|---|
+| 嵌套 zip 归档缓存 | `io/official_waveforms.py` | 消除"每样本全量重解压内层 zip"，官方包读取加速数十~上百倍（`scripts/bench_io.py` 实测） |
+| 跨文件合批推理 | `inference/picker.py::pick_batch` | 多波形拼一个 Stream 单次 classify，滑窗张量凑满 batch，GPU/CPU 不空转 |
+| I/O 流水线 | `tasks/task1_runner.py::run_task1_samples_fast` | 读 mseed（线程池预取）与推理重叠；失败隔离语义不变 |
+| 整批预测 | `tasks/baseline_models.py::predict_many` | T2/T3 树模型一次矩阵调用替代逐样本循环 |
+| 运行时开关 | `--fp16 / --threads / --batch-size / --file-batch / --workers` | CUDA 半精度、CPU 满核、批大小可调；`--no-fast` 一键回退旧路径对照 |
+| API 常驻+预热 | `scripts/serve_api.py` | 启动即加载权重并跑一条合成波形，正式请求零冷启动 |
+
+```bash
+# 去年真题端到端（默认启用全部优化；--no-fast 回退旧实现对照）
+python scripts/run_official_task1.py --input round2.zip --output T1.an \
+    --device auto --workers 8 --file-batch 16 --answer-package round2.zip
+
+# 任何提速开关（--overlap 调小 / --fp16 / --compile / 升级 seisbench / 换权重）
+# 启用前必须过 A/B 同分闸门：
+python scripts/ab_compare.py --input round2.zip \
+    --a "--device cuda" --b "--device cuda --fp16 --overlap 0.2" \
+    --answer-package round2.zip
+```
+
+再快一档（按收益排序）：升级 `seisbench>=0.11`（annotate 后端已 C 重写，官方称 CPU≥20%、
+GPU>50% 提速，setup.sh 已固定）→ `--overlap` 从 0.5 下调（窗口数近乎线性减少）→
+`--fp16`（CUDA）→ `--compile`（torch 2.x）。每一步都用 ab_compare 验证同分后再启用。
+
+## 🧠 训练捷径（Colab 一键，90GB 盘吃超大数据集）
+
+基座直接用 `PhaseNet('diting')`（USTC 271 万条中国数据训好的 picker，一行加载）；
+微调数据用 `scripts/chunked_fetch.py` 分块下载→抽 3001 点窗→删块循环取 CWA 等大集；
+`notebooks/colab_bigdata_finetune.ipynb` 从零到 best.pt 全自动、断点续传。
+
+---
+
 ## 一、每次开机三步复现（最重要）
 
 免费 GPU 机器（FunHPC / Cloud Studio）关机会清空一切。开新机器后：
