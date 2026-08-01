@@ -120,6 +120,17 @@ m = sbm.PhaseNet.from_pretrained("$PRETRAINED")
 print("PhaseNet('$PRETRAINED') 加载成功: 采样率", m.sampling_rate, "Hz, 输入", m.in_samples, "点")
 PYEOF
 
+# 分类器权重探测：SeismicXM(94.2%) 需要 207MB encoder 权重（git 传不了，靠 scp）。
+# 不在就自动回退 baseline(81.5%)——/classify 仍可用，只是分数低一档。
+SXM="$REPO_ROOT/weights/seismicxm/seismicxm.middle.pt"
+if [ -f "$SXM" ]; then
+  echo "分类器: SeismicXM 深度特征就绪（r2 留出 94.2%）—— $(du -h "$SXM" | cut -f1)"
+else
+  echo "分类器: !! 未找到 $SXM —— /classify 将回退 baseline(81.5%)。"
+  echo "         要用 94.2% 版，从本地传 encoder 权重后重跑本脚本："
+  echo "         scp -P <ssh端口> weights/seismicxm/seismicxm.middle.pt root@<主机>:$REPO_ROOT/weights/seismicxm/"
+fi
+
 echo "==================== [4/6] 安装服务 ===================="
 EXTRA_ARGS=""
 [ -n "$WEIGHTS" ] && EXTRA_ARGS="$EXTRA_ARGS --weights $WEIGHTS"

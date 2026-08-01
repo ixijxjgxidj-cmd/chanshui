@@ -13,6 +13,36 @@ sudo bash $REPO/deploy/deploy_api.sh                  # 一键重部（幂等）
 bash $REPO/deploy/watchdog.sh                         # 手动跑一次真实请求探活
 ```
 
+> **本文默认宿主是 systemd + `/root/dizheng` + `http://<公网IP>:8000`。当前实际部署是
+> FunHPC 容器：仓库在 `/data/dizheng`、无 systemd（走 nohup 守护循环）、外网是平台
+> HTTPS 代理 `https://<host>:<映射端口>` → 容器 8000。下文凡 `systemctl` 开头的命令，
+> 在该机器上一律走 §4 表里的 nohup 分支；`watchdog.sh` / `deploy_api.sh` 本身已内置
+> 两条分支的自动判别，不用改。**
+
+---
+
+## 0. 远程操作一律先开 tmux（平台原话：避免网络波动或 SSH 关闭导致中断）
+
+**先分清什么会断：**
+
+- **API 服务本身不会断。** `deploy_api.sh` 用 `nohup` 起 supervisor 循环，已脱离控制终端、
+  忽略 SIGHUP，SSH 关掉照跑（2026-08-01 实测：2315 次真题请求打的就是无 SSH 连接的进程，全绿）。
+- **会断的是你手敲的前台长命令**：`deploy_api.sh` 本身（首次/重租后装依赖几分钟）、
+  soak 测试（~5 分钟）、微调训练（小时级）、§5 变体演练。SSH 一抖就 SIGHUP 死。
+  其中 **deploy 断在半路最难受**：依赖装一半、端口占着、权重下一半，重跑前还得先清残留。
+- **tmux 救不了容器本身被停/释放**——那会连 tmux 会话带守护循环一起没，
+  只能重跑部署 + 到平台改登记地址（见 §3 第 4 级）。
+
+```bash
+tmux new -s seis        # 首次开会话
+tmux a -t seis          # 断线后重连（回到原样，命令还在跑）
+tmux ls                 # 看有哪些会话
+# 会话内：Ctrl-b d 脱离（命令继续跑）， Ctrl-b [ 进翻页模式看长输出，q 退出
+```
+
+断线后**先 `tmux a -t seis` 看上一条跑完没有，再决定要不要重跑**——尤其是 deploy，
+盲目重跑会撞上还占着 8000 端口的旧实例。
+
 ---
 
 ## 1. T-1 检查单（评测前一天，全部打勾）
@@ -25,7 +55,8 @@ bash $REPO/deploy/watchdog.sh                         # 手动跑一次真实请
   `systemctl cat phasepick-api | grep ExecStart` 抄下全行（基座/权重/阈值为证，出问题时对照）。
 - [ ] **基线延迟记录**：把上面外网复测输出的 均值/中位/最大 延迟与 P/S 总数抄进值班笔记，
   评测中延迟翻倍/拾取数异常时对照。
-- [ ] **内存 soak 复测**（泄漏补丁的 Linux 侧验证，本地探针数字是 Windows 的）：
+- [ ] **内存 soak 复测**（泄漏补丁的 Linux 侧验证，本地探针数字是 Windows 的）——
+  **~5 分钟，务必在 tmux 里跑（见 §0）**：
   ```bash
   systemctl show phasepick-api -p MemoryCurrent                    # 前
   PYTHONUTF8=1 $REPO/.venv/bin/python $REPO/scripts/check_api.py \
