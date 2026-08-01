@@ -386,16 +386,35 @@ def build_engine(args) -> Engine:
             from phasepicker.magnitude import build_estimator
 
             mag_path = getattr(args, "mag_weights", None)
-            if kind == "baseline" and not mag_path:
-                mag_path = os.path.join(
-                    os.path.dirname(__file__), "..",
-                    "weights", "official_r1_to_r2", "t2_magnitude_baseline.joblib",
-                )
+            if not mag_path:
+                default_mag = {
+                    "baseline": "t2_magnitude_baseline.joblib",
+                    "seismicxm": "t2_seismicxm_r1r2.joblib",
+                }.get(kind)
+                if default_mag:
+                    mag_path = os.path.join(
+                        os.path.dirname(__file__), "..",
+                        "weights", "official_r1_to_r2", default_mag,
+                    )
             mag = build_estimator(kind, mag_path)
             print(f"震级估计器: {kind} 已就绪")
         except Exception:  # noqa: BLE001
             traceback.print_exc()
-            print(f"!! 震级估计器 {kind!r} 构建失败，/magnitude 将返回 501；/pick 不受影响")
+            if kind == "seismicxm":
+                # 缺权重/依赖时回退 baseline，保住 MAE 0.817 而非 501
+                try:
+                    from phasepicker.magnitude import build_estimator
+
+                    mag = build_estimator("baseline", os.path.join(
+                        os.path.dirname(__file__), "..",
+                        "weights", "official_r1_to_r2", "t2_magnitude_baseline.joblib",
+                    ))
+                    print("!! seismicxm 震级构建失败，已回退 baseline（MAE 0.817）")
+                except Exception:  # noqa: BLE001
+                    traceback.print_exc()
+                    print("!! 震级估计器构建失败，/magnitude 将返回 501；/pick 不受影响")
+            else:
+                print(f"!! 震级估计器 {kind!r} 构建失败，/magnitude 将返回 501；/pick 不受影响")
 
     # 分类器：同一套降级纪律（官网记分板含"地震分类"列，缺端点=该列 0 分）
     cls = None
@@ -660,14 +679,15 @@ def make_arg_parser() -> argparse.ArgumentParser:
                     help="额外注册一个隐蔽入口路径，默认不开启；/、/pick、/predict "
                          "始终可用。Git Bash 下写不带前导斜杠的 pick-x7f3a9"
                          "（/开头会被 MSYS 改写成 Windows 路径），两种写法等价")
-    ap.add_argument("--mag-model", default="baseline",
-                    choices=["baseline", "psdelta", "off"],
-                    help="/magnitude 端点的震级估计器：baseline=去年 T2 特征回归"
-                         "（r2 留出 MAE 0.817，整文件一个 M）；psdelta=S-P 时差+幅值"
-                         "占位公式（按事件分组）；off=端点返回 501。构建失败自动降级"
-                         "为 off，绝不影响 /pick")
+    ap.add_argument("--mag-model", default="seismicxm",
+                    choices=["seismicxm", "baseline", "psdelta", "off"],
+                    help="/magnitude 端点的震级估计器：seismicxm=深度特征+Ridge"
+                         "（r2 留出 MAE 0.621，需 weights/seismicxm/ 权重）；"
+                         "baseline=去年 T2 特征回归（MAE 0.817）；psdelta=S-P 时差"
+                         "占位公式；off=501。构建失败自动回退/降级，绝不影响 /pick")
     ap.add_argument("--mag-weights", default=None,
-                    help="baseline 震级模型路径（默认 weights/official_r1_to_r2/"
+                    help="震级模型路径（默认 weights/official_r1_to_r2/ 下按 "
+                         "--mag-model 选 t2_seismicxm_r1r2.joblib 或 "
                          "t2_magnitude_baseline.joblib）")
     ap.add_argument("--cls-model", default="seismicxm", choices=["seismicxm", "baseline", "off"],
                     help="/classify 端点的分类器：seismicxm=深度特征+逻辑回归"

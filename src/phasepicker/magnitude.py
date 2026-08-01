@@ -276,6 +276,40 @@ class PSDeltaMagnitude(MagnitudeEstimator):
         return out
 
 
+class SeismicXMMagnitude(MagnitudeEstimator):
+    """SeismicXM(middle) 深度特征 + Ridge 的震级估计器。
+
+    去年真题验收：第1轮训练→第2轮盲测 MAE 0.621（baseline 0.817），见
+    scripts/train_seismicxm_t2.py。与 T3 的 SeismicXMClassifier 共用同一
+    编码器与预处理（tasks/seismicxm_features.py）。整文件一个 M。
+    """
+
+    name = "seismicxm"
+    needs_picks = False
+
+    def __init__(self, bundle_path: str, encoder_weights: Optional[str] = None):
+        import joblib
+
+        bundle = joblib.load(bundle_path)
+        if bundle.get("task") != "T2" or "pipeline" not in bundle:
+            raise ValueError(f"不是有效的 T2 seismicxm bundle：{bundle_path}")
+        self._pipeline = bundle["pipeline"]
+        from .tasks.seismicxm_features import SeismicXMEncoder
+
+        self._encoder = SeismicXMEncoder(encoder_weights or bundle.get("encoder_weights"))
+
+    def magnitude_for_stream(self, stream) -> float:
+        magnitude = float(self._pipeline.predict(self._encoder.encode_stream(stream)[None])[0])
+        return min(9.9, max(0.0, magnitude))
+
+    def estimate(self, inp: MagnitudeInput) -> List[List[float]]:
+        if not inp.waveforms:
+            return []
+        stream = inp.stream if inp.stream is not None else _waveforms_to_pseudo_stream(inp.waveforms)
+        magnitude = self.magnitude_for_stream(stream)
+        return [[magnitude] for _ in inp.waveforms]
+
+
 # =========================================================================
 # 工厂：serve_api CLI --mag-model 的接线点
 # =========================================================================
@@ -288,6 +322,10 @@ def build_estimator(kind: str, model_path: Optional[str] = None) -> Optional[Mag
         if not model_path:
             raise ValueError("baseline 震级模型需要 --mag-weights 指向 t2_magnitude_baseline.joblib")
         return BaselineJoblibMagnitude(model_path)
+    if kind == "seismicxm":
+        if not model_path:
+            raise ValueError("seismicxm 震级模型需要 --mag-weights 指向 t2_seismicxm_*.joblib")
+        return SeismicXMMagnitude(model_path)
     if kind == "psdelta":
         return PSDeltaMagnitude()
-    raise ValueError(f"未知震级模型：{kind}（可选 baseline / psdelta / off）")
+    raise ValueError(f"未知震级模型：{kind}（可选 seismicxm / baseline / psdelta / off）")

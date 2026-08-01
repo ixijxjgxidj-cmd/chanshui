@@ -114,7 +114,7 @@ def test_mags_to_official_json_rounding_and_collision():
 
 def test_cli_defaults_magnitude_on():
     args = serve_api.make_arg_parser().parse_args([])
-    assert args.mag_model == "baseline"
+    assert args.mag_model == "seismicxm"  # 2026-08 起默认深度震级（r2 留出 MAE 0.621）
     assert args.mag_weights is None  # None → build_engine 内解析仓库默认路径
 
 
