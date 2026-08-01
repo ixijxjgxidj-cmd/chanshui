@@ -108,6 +108,49 @@ def group_by_station(stream: "Stream") -> dict:
     return groups
 
 
+def _collect_gaps(traces: List["Trace"]) -> List[Tuple[float, float]]:
+    """merge 前记录同一分量多段之间的缺口区间（绝对 epoch 秒）。
+
+    缺口判定：按起始时间排序后，若后段起点比"已覆盖范围末尾"晚超过 1.5 个
+    采样间隔，则 (已覆盖末尾, 后段起点) 是一个缺口。1.5 倍容差吸收半个采样点
+    的时间戳抖动；重叠段（后段起点 <= 已覆盖末尾）不是缺口，交给 merge 插值。
+    用"运行最大末尾"而非相邻两段比较，正确处理一段完全包含在另一段内的情形。
+
+    这些区间随后被 merge(fill_value=0) 零填充——零填充区跑出的 pick 是伪造的
+    （seisbench issue #273），必须记录下来供推理层否决。
+    """
+    gaps: List[Tuple[float, float]] = []
+    if len(traces) < 2:
+        return gaps
+    trs = sorted(traces, key=lambda t: t.stats.starttime)
+    covered_end: Optional[float] = None
+    for tr in trs:
+        start = float(tr.stats.starttime.timestamp)
+        end = float(tr.stats.endtime.timestamp)
+        delta = 1.0 / float(tr.stats.sampling_rate) if tr.stats.sampling_rate else 0.0
+        if covered_end is not None and start - covered_end > 1.5 * delta:
+            gaps.append((covered_end, start))
+        covered_end = end if covered_end is None else max(covered_end, end)
+    return gaps
+
+
+def _union_intervals(intervals: List[Tuple[float, float]]) -> List[Tuple[float, float]]:
+    """把多分量收集来的缺口区间做并集合并（重叠/相接的并成一段），升序输出。
+
+    任一分量有缺口，该时间段的三分量输入就已残缺，pick 均不可信，
+    所以 Waveform 级别只需要一份并集，无须区分来自哪个分量。
+    """
+    if not intervals:
+        return []
+    merged: List[Tuple[float, float]] = []
+    for start, end in sorted(intervals):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
 def _merge_gappy(traces: List["Trace"], station: str, result: IngestResult) -> Optional["Stream"]:
     """合并同一分量可能存在的多段（gap/overlap）。
 
@@ -115,6 +158,7 @@ def _merge_gappy(traces: List["Trace"], station: str, result: IngestResult) -> O
     - method=1：重叠段取插值；缺口用 fill_value 填 0（后续预处理会去均值，
       填 0 不会引入直流偏置到模型可感知的程度，且保持采样点与时间的严格对应）。
     保持时间连续性是"采样点↔绝对时间"换算成立的前提，这一步至关重要。
+    缺口区间由调用方在 merge 前用 _collect_gaps 记录（本函数只管填充）。
     """
     try:
         st = Stream(traces=traces)
@@ -151,16 +195,27 @@ def build_waveform(
         return None
 
     # 3) 每个在场分量合并多段 + 采样率一致性；合并失败/合并后为空的分量
-    #    降级视同缺失（零填充），而不是丢整站
+    #    降级视同缺失（零填充），而不是丢整站。合并前先记录缺口区间——
+    #    merge 会把缺口零填充抹平，之后就再也看不出哪里是假数据了。
     merged: dict = {}
     rates = set()
+    gap_intervals: List[Tuple[float, float]] = []
     for comp in CHANNEL_ORDER:
         if comp not in by_comp:
             continue
+        comp_gaps = _collect_gaps(by_comp[comp])
         st = _merge_gappy(by_comp[comp], station, result)
         if st is None or len(st) == 0:
             result.add_warning(station, "empty_after_merge", comp)
             continue
+        gap_intervals.extend(comp_gaps)
+        if comp_gaps:
+            result.add_warning(
+                station,
+                "gap_zero_filled",
+                f"{comp} 分量 {len(comp_gaps)} 个缺口已零填充并记录: "
+                + ", ".join(f"[{a:.2f}, {b:.2f}]" for a, b in comp_gaps),
+            )
         tr = st[0]
         merged[comp] = tr
         rates.add(round(float(tr.stats.sampling_rate), 6))
@@ -235,6 +290,7 @@ def build_waveform(
         sampling_rate=sampling_rate,
         starttime_utc=starttime_utc,
         station=station,
+        gaps=_union_intervals(gap_intervals),
     )
 
 

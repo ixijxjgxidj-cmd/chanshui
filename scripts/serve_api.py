@@ -124,15 +124,7 @@ def picks_to_official_json(
       这本身就是对"数量误差"项的正确表达。
     - 台站名冲突（不同 network 同名台站）时退回完整 NET.STA 作键，保证不覆盖。
     """
-    keys: List[str] = []
-    seen: Dict[str, int] = {}
-    for wf in waveforms:
-        k = _station_key(wf.station)
-        seen[k] = seen.get(k, 0) + 1
-        keys.append(k)
-    for i, wf in enumerate(waveforms):
-        if seen[keys[i]] > 1:
-            keys[i] = (wf.station or keys[i]).strip()
+    keys = _station_keys(waveforms)
 
     out: Dict[str, Dict[str, List[str]]] = {}
     for key, picks in zip(keys, picks_per_wf):
@@ -148,13 +140,48 @@ def picks_to_official_json(
     return out
 
 
+def _station_keys(waveforms: List[Waveform]) -> List[str]:
+    """台站响应键：默认砍成台站名，同名冲突退回完整 NET.STA（/pick 与 /magnitude 共用）。"""
+    keys: List[str] = []
+    seen: Dict[str, int] = {}
+    for wf in waveforms:
+        k = _station_key(wf.station)
+        seen[k] = seen.get(k, 0) + 1
+        keys.append(k)
+    for i, wf in enumerate(waveforms):
+        if seen[keys[i]] > 1:
+            keys[i] = (wf.station or keys[i]).strip()
+    return keys
+
+
+def mags_to_official_json(
+    waveforms: List[Waveform],
+    mags_per_wf: List[List[float]],
+) -> Dict[str, Dict[str, List[float]]]:
+    """震级响应组装：台站名 → {"M": [震级...]}。
+
+    官方尚未公布震级 API 的输出格式——采用与震相同构的最保守形状
+    （台站键 + 单键数组），一位小数（去年 T2 答案精度）。格式一旦公布只改这里。
+    """
+    out: Dict[str, Dict[str, List[float]]] = {}
+    for key, mags in zip(_station_keys(waveforms), mags_per_wf):
+        slot = out.setdefault(key, {"M": []})
+        slot["M"].extend(round(float(m), 1) for m in mags)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # 推理引擎：模型常驻 + 合批 + 互斥
 # ---------------------------------------------------------------------------
 class Engine:
-    def __init__(self, picker):
+    def __init__(self, picker, mag_estimator=None):
         self._picker = picker
+        self._mag = mag_estimator  # None = 震级端点 501（--mag-model off 或构建失败降级）
         self._lock = threading.Lock()  # 单模型串行推理；解析/组装在锁外并发
+
+    @property
+    def has_magnitude(self) -> bool:
+        return self._mag is not None
 
     def process_mseed_bytes(self, raw: bytes) -> Dict[str, Dict[str, List[str]]]:
         from phasepicker.io.mseed_reader import load_waveforms
@@ -167,6 +194,29 @@ class Engine:
         with self._lock:
             picks_per_wf = self._pick_all(waveforms)
         return picks_to_official_json(waveforms, picks_per_wf)
+
+    def process_mseed_bytes_magnitude(self, raw: bytes) -> Dict[str, Dict[str, List[float]]]:
+        """震级路径：波形 →（按需拾取）→ 估计器 → 官方 JSON。
+
+        needs_picks=False 的估计器（如 baseline 整文件特征回归）跳过拾取，
+        单请求延迟更低；psdelta 这类按事件分组的才付拾取成本。"""
+        from phasepicker.io.mseed_reader import load_waveforms
+        from phasepicker.magnitude import MagnitudeInput
+
+        result = load_waveforms(raw)
+        waveforms = result.waveforms
+        if not waveforms:
+            return {}
+
+        with self._lock:
+            if getattr(self._mag, "needs_picks", True):
+                picks_per_wf = self._pick_all(waveforms)
+            else:
+                picks_per_wf = [[] for _ in waveforms]
+            mags_per_wf = self._mag.estimate(
+                MagnitudeInput(waveforms=waveforms, picks_per_wf=picks_per_wf)
+            )
+        return mags_to_official_json(waveforms, mags_per_wf)
 
     def _pick_all(self, waveforms: List[Waveform]) -> List[List[Pick]]:
         if hasattr(self._picker, "pick_batch"):
@@ -220,7 +270,26 @@ def build_engine(args) -> Engine:
         s_merge_window_s=getattr(args, "s_merge_window", None),
     )
     picker = SeisBenchPicker.from_config(cfg)
-    return Engine(picker)
+
+    # 震级估计器：构建失败绝不拖垮 /pick 主业务——降级为 None（端点 501）并留痕
+    mag = None
+    kind = getattr(args, "mag_model", "off")
+    if kind and kind != "off":
+        try:
+            from phasepicker.magnitude import build_estimator
+
+            mag_path = getattr(args, "mag_weights", None)
+            if kind == "baseline" and not mag_path:
+                mag_path = os.path.join(
+                    os.path.dirname(__file__), "..",
+                    "weights", "official_r1_to_r2", "t2_magnitude_baseline.joblib",
+                )
+            mag = build_estimator(kind, mag_path)
+            print(f"震级估计器: {kind} 已就绪")
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+            print(f"!! 震级估计器 {kind!r} 构建失败，/magnitude 将返回 501；/pick 不受影响")
+    return Engine(picker, mag_estimator=mag)
 
 
 # ---------------------------------------------------------------------------
@@ -258,14 +327,16 @@ def create_app(engine: Engine, extra_route: Optional[str] = None):
                 break
         return bytes(buf[:MAX_BODY_BYTES])
 
-    async def _handle(request: Request):
-        t0 = time.perf_counter()
+    async def _extract_payloads(request: Request):
+        """共用的载荷解析（/pick 与 /magnitude 同一套契约）。
 
+        返回 (payloads, early_response)：early_response 非 None 时直接原样返回
+        （413/400/降级 200{}），否则用 payloads 继续业务处理。"""
         # U1: 声明长度超限在读任何正文之前就拒；畸形 Content-Length（非数字）
         # 不在此拦，由下面的截断读取兜底
         declared = request.headers.get("content-length") or ""
         if declared.isdigit() and int(declared) > MAX_BODY_BYTES:
-            return JSONResponse(
+            return [], JSONResponse(
                 status_code=413,
                 content={"error": f"正文超过上限 {MAX_BODY_BYTES} 字节"},
             )
@@ -288,11 +359,11 @@ def create_app(engine: Engine, extra_route: Optional[str] = None):
                     # U21: 走到这说明请求确实按 multipart 发了（哪怕文件字段是
                     # 0 字节、或只有文本字段）——按"宁可空表"返回 200 {}；
                     # 400 只留给下面既无文件字段又无 body 的裸请求
-                    return JSONResponse(content={})
+                    return [], JSONResponse(content={})
             else:
                 body = await _read_body_capped(request)
                 if not body:
-                    return JSONResponse(
+                    return [], JSONResponse(
                         status_code=400,
                         content={"error": "未收到波形文件：请以 multipart files= 上传 .mseed"},
                     )
@@ -301,7 +372,14 @@ def create_app(engine: Engine, extra_route: Optional[str] = None):
             # C8: multipart/正文解析层的畸形输入（异常 boundary、截断头部……）
             # 也必须守住"绝不 5xx"契约——降级 200 {}，留 traceback 便于排查
             traceback.print_exc()
-            return JSONResponse(content={})
+            return [], JSONResponse(content={})
+        return payloads, None
+
+    async def _handle(request: Request):
+        t0 = time.perf_counter()
+        payloads, early = await _extract_payloads(request)
+        if early is not None:
+            return early
 
         merged: Dict[str, Dict[str, List[str]]] = {}
         for raw in payloads:
@@ -326,10 +404,41 @@ def create_app(engine: Engine, extra_route: Optional[str] = None):
             headers={"X-Process-Time-Ms": f"{elapsed_ms:.1f}"},
         )
 
-    # 报名时登记哪个路径都行：/、/pick、/predict 三个入口等价
+    async def _handle_mag(request: Request):
+        t0 = time.perf_counter()
+        if not engine.has_magnitude:
+            return JSONResponse(
+                status_code=501,
+                content={"error": "震级估计未启用（--mag-model off 或模型构建失败）"},
+            )
+        payloads, early = await _extract_payloads(request)
+        if early is not None:
+            return early
+
+        merged: Dict[str, Dict[str, List[float]]] = {}
+        for raw in payloads:
+            try:
+                one = await run_in_threadpool(engine.process_mseed_bytes_magnitude, raw)
+            except Exception:  # noqa: BLE001 —— 与 /pick 同契约：降级空表不 5xx
+                traceback.print_exc()
+                one = {}
+            for sta, slot in one.items():
+                tgt = merged.setdefault(sta, {"M": []})
+                tgt["M"] = tgt["M"] + slot["M"]
+
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        return JSONResponse(
+            content=merged,
+            headers={"X-Process-Time-Ms": f"{elapsed_ms:.1f}"},
+        )
+
+    # 报名时登记哪个路径都行：/、/pick、/predict 三个入口等价；
+    # 震级 API 登记 /magnitude（/mag 等价别名）
     app.post("/")(_handle)
     app.post("/pick")(_handle)
     app.post("/predict")(_handle)
+    app.post("/magnitude")(_handle_mag)
+    app.post("/mag")(_handle_mag)
     if extra_route:
         # U1 附加加固（默认关）：公网扫描器只打常见路径，平台登记时可只报
         # 这个不可猜的入口
@@ -365,6 +474,15 @@ def make_arg_parser() -> argparse.ArgumentParser:
                     help="额外注册一个隐蔽入口路径，默认不开启；/、/pick、/predict "
                          "始终可用。Git Bash 下写不带前导斜杠的 pick-x7f3a9"
                          "（/开头会被 MSYS 改写成 Windows 路径），两种写法等价")
+    ap.add_argument("--mag-model", default="baseline",
+                    choices=["baseline", "psdelta", "off"],
+                    help="/magnitude 端点的震级估计器：baseline=去年 T2 特征回归"
+                         "（r2 留出 MAE 0.817，整文件一个 M）；psdelta=S-P 时差+幅值"
+                         "占位公式（按事件分组）；off=端点返回 501。构建失败自动降级"
+                         "为 off，绝不影响 /pick")
+    ap.add_argument("--mag-weights", default=None,
+                    help="baseline 震级模型路径（默认 weights/official_r1_to_r2/"
+                         "t2_magnitude_baseline.joblib）")
     ap.add_argument("--no-warmup", action="store_true")
     return ap
 

@@ -14,6 +14,8 @@
 #   P_MERGE_WINDOW= / S_MERGE_WINDOW=      # 去重合并窗(秒)；留空 = 用代码内全局默认
 #                              #（全局默认见 src/phasepicker/defaults.py，P3 网格产出后从这里接入）
 #   PYTHON_BIN=python3         # 老镜像装了 python3.12 时指定，如 PYTHON_BIN=python3.12
+#   THREADS=2                  # CPU 推理线程数（含 OMP_NUM_THREADS）。实测 2 线程最优，
+#                              #  满核反而更慢（seisbench issue #68/#202 同结论），一般别改
 #
 # 依赖版本锁定在 deploy/requirements.lock（本地彩排验证过的精确版本）；
 # 要求 python >= 3.12（Ubuntu 24.04 自带；老镜像先装 python3.12 再 PYTHON_BIN 指定）。
@@ -36,6 +38,11 @@ S_THRESHOLD="${S_THRESHOLD:-}"
 P_MERGE_WINDOW="${P_MERGE_WINDOW:-}"
 S_MERGE_WINDOW="${S_MERGE_WINDOW:-}"
 PYBIN="${PYTHON_BIN:-python3}"
+# CPU 推理线程数默认 2：PhaseNet 这类小模型 CPU 满核多线程反而更慢
+# （seisbench issue #68/#202；本仓实测 2 线程最优，28 分钟长文件 classify 0.05~0.07s，
+#   速度非瓶颈）。--threads 管 torch 线程，OMP_NUM_THREADS 管底层 BLAS/OpenMP。
+THREADS="${THREADS:-2}"
+export OMP_NUM_THREADS="$THREADS"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -99,7 +106,7 @@ EXTRA_ARGS=""
 [ -n "$S_THRESHOLD" ] && EXTRA_ARGS="$EXTRA_ARGS --s-threshold $S_THRESHOLD"
 [ -n "$P_MERGE_WINDOW" ] && EXTRA_ARGS="$EXTRA_ARGS --p-merge-window $P_MERGE_WINDOW"
 [ -n "$S_MERGE_WINDOW" ] && EXTRA_ARGS="$EXTRA_ARGS --s-merge-window $S_MERGE_WINDOW"
-START_CMD="$PY $REPO_ROOT/scripts/serve_api.py --pretrained $PRETRAINED --device cpu --host 0.0.0.0 --port $PORT$EXTRA_ARGS"
+START_CMD="$PY $REPO_ROOT/scripts/serve_api.py --pretrained $PRETRAINED --device cpu --host 0.0.0.0 --port $PORT --threads $THREADS$EXTRA_ARGS"
 echo "启动命令: $START_CMD"
 
 # 无论走哪条分支，先按 PID 文件把上一轮 nohup 兜底进程清干净：
@@ -123,6 +130,7 @@ WorkingDirectory=$REPO_ROOT
 Environment=SEISBENCH_CACHE_ROOT=$CACHE
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONUTF8=1
+Environment=OMP_NUM_THREADS=$THREADS
 ExecStart=$START_CMD
 Restart=always
 RestartSec=3
@@ -135,6 +143,7 @@ WantedBy=multi-user.target
 UNIT
   # PYTHONUTF8=1: systemd 干净环境无 locale，最小镜像下 Python 编码回落 ASCII，
   #   读 diting 中文元数据 JSON 会崩（交互 shell 自检发现不了，只有服务里炸）。
+  # OMP_NUM_THREADS: 与 --threads 一致压到 $THREADS——CPU 满核多线程反而慢（见文件头 THREADS 注释）。
   # MemoryHigh/Max + TimeoutStopSec: 内存异常时快速干净地重启，而不是整机 OOM 抖动。
   systemctl daemon-reload
   systemctl enable phasepick-api >/dev/null 2>&1
@@ -149,7 +158,7 @@ else
 # 停止只按 PID 文件精确 kill（先杀 supervisor 再杀 api），绝不 pkill -f。
 echo \$\$ > "$SUP_PID_FILE"
 while true; do
-  SEISBENCH_CACHE_ROOT="$CACHE" PYTHONUTF8=1 PYTHONUNBUFFERED=1 \\
+  SEISBENCH_CACHE_ROOT="$CACHE" PYTHONUTF8=1 PYTHONUNBUFFERED=1 OMP_NUM_THREADS=$THREADS \\
     $START_CMD >> "$REPO_ROOT/serve_api.log" 2>&1 &
   echo \$! > "$API_PID_FILE"
   wait \$! || true

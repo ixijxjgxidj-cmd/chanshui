@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
 from enum import Enum, IntEnum
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 
 class PhaseType(str, Enum):
@@ -62,12 +62,19 @@ class Waveform:
         starttime_utc: 波形第一个采样点的绝对时间（Unix epoch 秒）。
             这是把"采样点下标"换算回"绝对到时"的锚点，必须与 data 严格同步。
         station: 台站标识 NET.STA。
+        gaps: 数据缺口区间列表 [(起, 止)]，绝对 epoch 秒。长连续记录里缺口是
+            常态，merge 时缺口被零填充保持时间轴连续——但零填充区跑出的 pick
+            是伪造的（seisbench issue #273），每个假 pick 吃 0.5 分数量罚。
+            读取层（mseed_reader）在 merge 前记录各分量缺口于此，推理层据此
+            否决落在缺口附近的 pick。默认空列表，旧构造方式完全兼容；
+            compare=False——缺口是元信息，不参与 Waveform 相等性。
     """
 
     data: object  # numpy.ndarray, 避免在无 numpy 环境 import 失败
     sampling_rate: float
     starttime_utc: float
     station: str = ""
+    gaps: List[Tuple[float, float]] = field(default_factory=list, compare=False)
 
     @property
     def n_samples(self) -> int:
