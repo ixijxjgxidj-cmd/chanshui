@@ -83,6 +83,9 @@ class PickerConfig:
     compile_model: bool = False
     p_merge_window_s: Optional[float] = None
     s_merge_window_s: Optional[float] = None
+    #: 亚采样到时精细化：annotate 拿概率曲线后对峰做三点抛物线插值。
+    #: 挑峰与 classify 逐位同源（pick 集合不变），只精化到时；False 走原 classify。
+    subsample_refine: bool = True
 
 
 class BasePicker(ABC):
@@ -215,13 +218,83 @@ class SeisBenchPicker(BasePicker):
         if self._cfg.use_fp16 and self._device_type() == "cuda":
             amp_ctx = torch.autocast(device_type="cuda", dtype=torch.float16)
         with infer_ctx(), amp_ctx:
-            return self._model.classify(
-                stream,
-                batch_size=self._cfg.batch_size,
-                overlap=self._cfg.overlap,
-                P_threshold=self._cfg.p_threshold,
-                S_threshold=self._cfg.s_threshold,
+            # 能力探测：模型缺 annotate/picks_from_annotations（如测试桩、
+            # 非 SeisBench 模型）时自动回退 classify，不因精细化功能硬失败
+            refinable = (
+                self._cfg.subsample_refine
+                and hasattr(self._model, "annotate")
+                and hasattr(self._model, "picks_from_annotations")
             )
+            if not refinable:
+                return self._model.classify(
+                    stream,
+                    batch_size=self._cfg.batch_size,
+                    overlap=self._cfg.overlap,
+                    P_threshold=self._cfg.p_threshold,
+                    S_threshold=self._cfg.s_threshold,
+                )
+            return self._classify_refined(stream)
+
+    def _classify_refined(self, stream):
+        """annotate → picks_from_annotations（复刻 classify_aggregate 逐位一致）
+        → 峰值三点抛物线插值做亚采样到时精细化。
+
+        为什么不直接用 classify：它只返回峰值采样点时刻，概率曲线被丢弃。
+        模型输出按 sampling_rate(diting=50Hz) 网格量化，到时天然带 ±10ms
+        量化误差；抛物线插值用峰及左右邻点恢复连续极值位置，P 满分容差
+        0.1s 下这部分误差占比可观。挑峰逻辑（picks_from_annotations + 逐相位
+        阈值）与 SeisBench classify 内部完全同源——pick 集合不变，只精化到时。
+        """
+        import seisbench.util as sbu
+
+        ann = self._model.annotate(
+            stream,
+            batch_size=self._cfg.batch_size,
+            overlap=self._cfg.overlap,
+        )
+        picks = sbu.PickList()
+        thresholds = {"P": self._cfg.p_threshold, "S": self._cfg.s_threshold}
+        prefix = self._model.__class__.__name__
+        for phase, th in thresholds.items():
+            phase_ann = ann.select(channel=f"{prefix}_{phase}")
+            phase_picks = self._model.picks_from_annotations(phase_ann, th, phase)
+            for p in phase_picks:
+                self._refine_peak_inplace(p, phase_ann)
+            picks += phase_picks
+        return sbu.PickList(sorted(picks))
+
+    @staticmethod
+    def _refine_peak_inplace(pick, phase_ann) -> None:
+        """对单个 pick 的 peak_time 做三点抛物线亚采样插值（原位修改）。
+
+        找到覆盖该峰的概率 trace，取峰及左右邻点 (y0,y1,y2)，顶点偏移
+        delta = 0.5*(y0-y2)/(y0-2*y1+y2)，截断到 [-0.5, 0.5] 个采样间隔。
+        边界峰 / trace 缺失 / 分母退化时不动原值——失败即保持 classify 语义。
+        """
+        pid = str(getattr(pick, "trace_id", "") or "")
+        best = None
+        for tr in phase_ann:
+            if not tr.id.startswith(pid):
+                continue
+            if tr.stats.starttime <= pick.peak_time <= tr.stats.endtime:
+                best = tr
+                break
+        if best is None:
+            return
+        dt = float(best.stats.delta)
+        if dt <= 0:
+            return
+        idx = int(round(float(pick.peak_time - best.stats.starttime) / dt))
+        data = best.data
+        if idx <= 0 or idx >= len(data) - 1:
+            return
+        y0, y1, y2 = float(data[idx - 1]), float(data[idx]), float(data[idx + 1])
+        denom = y0 - 2.0 * y1 + y2
+        if abs(denom) < 1e-12:
+            return
+        delta = 0.5 * (y0 - y2) / denom
+        delta = max(-0.5, min(0.5, delta))
+        pick.peak_time = best.stats.starttime + (idx + delta) * dt
 
     def _device_type(self) -> str:
         try:
