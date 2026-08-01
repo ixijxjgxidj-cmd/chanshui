@@ -221,18 +221,37 @@ def mags_to_official_json(
     return out
 
 
+def cls_to_official_json(
+    waveforms: List[Waveform],
+    cls_per_wf: List[List[int]],
+) -> Dict[str, Dict[str, List[int]]]:
+    """分类响应组装：台站名 → {"class": [类别整数...]}（1..5，沿用去年 T3 语义）。
+
+    输出格式官方未公布，与震相/震级同构的保守形状；公布后只改这里。"""
+    out: Dict[str, Dict[str, List[int]]] = {}
+    for key, cls in zip(_station_keys(waveforms), cls_per_wf):
+        slot = out.setdefault(key, {"class": []})
+        slot["class"].extend(int(v) for v in cls)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # 推理引擎：模型常驻 + 合批 + 互斥
 # ---------------------------------------------------------------------------
 class Engine:
-    def __init__(self, picker, mag_estimator=None):
+    def __init__(self, picker, mag_estimator=None, cls_estimator=None):
         self._picker = picker
         self._mag = mag_estimator  # None = 震级端点 501（--mag-model off 或构建失败降级）
+        self._cls = cls_estimator  # None = 分类端点 501（--cls-model off 或构建失败降级）
         self._lock = threading.Lock()  # 单模型串行推理；解析/组装在锁外并发
 
     @property
     def has_magnitude(self) -> bool:
         return self._mag is not None
+
+    @property
+    def has_classify(self) -> bool:
+        return self._cls is not None
 
     def process_mseed_bytes(self, raw: bytes) -> Dict[str, Dict[str, List[str]]]:
         from phasepicker.io.mseed_reader import load_waveforms
@@ -268,6 +287,26 @@ class Engine:
                 MagnitudeInput(waveforms=waveforms, picks_per_wf=picks_per_wf)
             )
         return mags_to_official_json(waveforms, mags_per_wf)
+
+    def process_mseed_bytes_classify(self, raw: bytes) -> Dict[str, Dict[str, List[int]]]:
+        """分类路径：波形 →（按需拾取）→ 分类器 → 官方 JSON（与震级同构）。"""
+        from phasepicker.io.mseed_reader import load_waveforms
+        from phasepicker.magnitude import MagnitudeInput
+
+        result = load_waveforms(raw)
+        waveforms = result.waveforms
+        if not waveforms:
+            return {}
+
+        with self._lock:
+            if getattr(self._cls, "needs_picks", True):
+                picks_per_wf = self._pick_all(waveforms)
+            else:
+                picks_per_wf = [[] for _ in waveforms]
+            cls_per_wf = self._cls.estimate(
+                MagnitudeInput(waveforms=waveforms, picks_per_wf=picks_per_wf)
+            )
+        return cls_to_official_json(waveforms, cls_per_wf)
 
     def _pick_all(self, waveforms: List[Waveform]) -> List[List[Pick]]:
         if hasattr(self._picker, "pick_batch"):
@@ -340,7 +379,26 @@ def build_engine(args) -> Engine:
         except Exception:  # noqa: BLE001
             traceback.print_exc()
             print(f"!! 震级估计器 {kind!r} 构建失败，/magnitude 将返回 501；/pick 不受影响")
-    return Engine(picker, mag_estimator=mag)
+
+    # 分类器：同一套降级纪律（官网记分板含"地震分类"列，缺端点=该列 0 分）
+    cls = None
+    ckind = getattr(args, "cls_model", "off")
+    if ckind and ckind != "off":
+        try:
+            from phasepicker.classification import build_classifier
+
+            cls_path = getattr(args, "cls_weights", None)
+            if ckind == "baseline" and not cls_path:
+                cls_path = os.path.join(
+                    os.path.dirname(__file__), "..",
+                    "weights", "official_r1_to_r2", "t3_event_baseline.joblib",
+                )
+            cls = build_classifier(ckind, cls_path)
+            print(f"分类器: {ckind} 已就绪")
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+            print(f"!! 分类器 {ckind!r} 构建失败，/classify 将返回 501；/pick 不受影响")
+    return Engine(picker, mag_estimator=mag, cls_estimator=cls)
 
 
 # ---------------------------------------------------------------------------
@@ -493,13 +551,44 @@ def create_app(engine: Engine, extra_route: Optional[str] = None, capture_dir: O
             background=_capture_bg("magnitude", payloads, merged, elapsed_ms),
         )
 
+    async def _handle_cls(request: Request):
+        t0 = time.perf_counter()
+        if not engine.has_classify:
+            return JSONResponse(
+                status_code=501,
+                content={"error": "地震分类未启用（--cls-model off 或模型构建失败）"},
+            )
+        payloads, early = await _extract_payloads(request)
+        if early is not None:
+            return early
+
+        merged: Dict[str, Dict[str, List[int]]] = {}
+        for _name, raw in payloads:
+            try:
+                one = await run_in_threadpool(engine.process_mseed_bytes_classify, raw)
+            except Exception:  # noqa: BLE001 —— 与 /pick 同契约：降级空表不 5xx
+                traceback.print_exc()
+                one = {}
+            for sta, slot in one.items():
+                tgt = merged.setdefault(sta, {"class": []})
+                tgt["class"] = tgt["class"] + slot["class"]
+
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        return JSONResponse(
+            content=merged,
+            headers={"X-Process-Time-Ms": f"{elapsed_ms:.1f}"},
+            background=_capture_bg("classify", payloads, merged, elapsed_ms),
+        )
+
     # 报名时登记哪个路径都行：/、/pick、/predict 三个入口等价；
-    # 震级 API 登记 /magnitude（/mag 等价别名）
+    # 震级 API 登记 /magnitude（/mag 等价别名）；分类 API 登记 /classify（/class 别名）
     app.post("/")(_handle)
     app.post("/pick")(_handle)
     app.post("/predict")(_handle)
     app.post("/magnitude")(_handle_mag)
     app.post("/mag")(_handle_mag)
+    app.post("/classify")(_handle_cls)
+    app.post("/class")(_handle_cls)
     if extra_route:
         # U1 附加加固（默认关）：公网扫描器只打常见路径，平台登记时可只报
         # 这个不可猜的入口
@@ -544,6 +633,13 @@ def make_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--mag-weights", default=None,
                     help="baseline 震级模型路径（默认 weights/official_r1_to_r2/"
                          "t2_magnitude_baseline.joblib）")
+    ap.add_argument("--cls-model", default="baseline", choices=["baseline", "off"],
+                    help="/classify 端点的分类器：baseline=去年 T3 特征树"
+                         "（r2 留出准确率 81.5%%，整文件一个类别 1..5）；off=501。"
+                         "构建失败自动降级，绝不影响 /pick")
+    ap.add_argument("--cls-weights", default=None,
+                    help="baseline 分类模型路径（默认 weights/official_r1_to_r2/"
+                         "t3_event_baseline.joblib）")
     ap.add_argument("--capture-dir", default=None,
                     help="请求采集目录：把评测方 POST 的原始波形+我们的响应落盘"
                          "（响应发回后的后台任务写盘，评测方零延迟感知；磁盘余量"
