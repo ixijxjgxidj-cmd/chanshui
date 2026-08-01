@@ -18,6 +18,8 @@
 #                              #  满核反而更慢（seisbench issue #68/#202 同结论），一般别改
 #   DEVICE=cpu                 # cpu / cuda。GPU 机传 DEVICE=cuda：改装 CUDA 版 torch
 #                              #  并以 --device cuda 启动（fp16 仍默认关，须同分验证后才开）
+#   CAPTURE_DIR=<仓库>/captured # 评测请求采集目录（原始波形+响应落盘，复赛间微调的
+#                              #  数据来源）。传 CAPTURE_DIR=off 关闭
 #
 # 依赖版本锁定在 deploy/requirements.lock（本地彩排验证过的精确版本）；
 # 要求 python >= 3.12（Ubuntu 24.04 自带；老镜像先装 python3.12 再 PYTHON_BIN 指定）。
@@ -46,6 +48,7 @@ PYBIN="${PYTHON_BIN:-python3}"
 THREADS="${THREADS:-2}"
 export OMP_NUM_THREADS="$THREADS"
 DEVICE="${DEVICE:-cpu}"
+CAPTURE_DIR="${CAPTURE_DIR:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -124,6 +127,12 @@ EXTRA_ARGS=""
 [ -n "$S_THRESHOLD" ] && EXTRA_ARGS="$EXTRA_ARGS --s-threshold $S_THRESHOLD"
 [ -n "$P_MERGE_WINDOW" ] && EXTRA_ARGS="$EXTRA_ARGS --p-merge-window $P_MERGE_WINDOW"
 [ -n "$S_MERGE_WINDOW" ] && EXTRA_ARGS="$EXTRA_ARGS --s-merge-window $S_MERGE_WINDOW"
+# 采集默认开（比赛数据 = 复赛微调材料）；CAPTURE_DIR=off 显式关闭
+if [ "$CAPTURE_DIR" != "off" ]; then
+  [ -n "$CAPTURE_DIR" ] || CAPTURE_DIR="$REPO_ROOT/captured"
+  mkdir -p "$CAPTURE_DIR"
+  EXTRA_ARGS="$EXTRA_ARGS --capture-dir $CAPTURE_DIR"
+fi
 START_CMD="$PY $REPO_ROOT/scripts/serve_api.py --pretrained $PRETRAINED --device $DEVICE --host 0.0.0.0 --port $PORT --threads $THREADS$EXTRA_ARGS"
 echo "启动命令: $START_CMD"
 

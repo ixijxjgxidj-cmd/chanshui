@@ -42,8 +42,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import io
+import json
 import os
+import re
+import shutil
 import sys
 import threading
 import time
@@ -92,12 +96,59 @@ MAX_BODY_BYTES = 200 * 1024 * 1024
 try:  # pragma: no cover - 导入失败路径
     from fastapi import FastAPI, Request  # noqa: E402
     from fastapi.responses import JSONResponse  # noqa: E402
+    from starlette.background import BackgroundTask  # noqa: E402
     from starlette.concurrency import run_in_threadpool  # noqa: E402
 
     _FASTAPI_IMPORT_ERROR = None
 except ImportError as _exc:  # noqa: N816
-    FastAPI = Request = JSONResponse = run_in_threadpool = None  # type: ignore[assignment]
+    FastAPI = Request = JSONResponse = run_in_threadpool = BackgroundTask = None  # type: ignore[assignment]
     _FASTAPI_IMPORT_ERROR = _exc
+
+
+# ---------------------------------------------------------------------------
+# 请求采集：把评测方 POST 来的原始波形与我们的响应落盘（比赛数据是最宝贵的
+# 微调材料，多轮赛制下这是复赛间迭代的最大杠杆）。
+# 设计红线：只在响应发回之后的后台任务里执行（评测方零延迟感知）；
+# 任何存储异常/磁盘不足只跳过绝不抛出——采集永远不能伤害主业务。
+# ---------------------------------------------------------------------------
+_CAPTURE_MIN_FREE_BYTES = 2 * 1024 ** 3  # 剩余磁盘低于 2GB 即停采，保服务不保数据
+
+
+def capture_save(capture_dir, endpoint, items, response_obj, elapsed_ms):
+    """items: [(原始文件名, 字节)]。写波形文件 + 追加 manifest.jsonl 一行。"""
+    try:
+        from datetime import datetime, timezone as _tz
+
+        now = datetime.now(_tz.utc)
+        day_dir = os.path.join(capture_dir, now.strftime("%Y%m%d"))
+        os.makedirs(day_dir, exist_ok=True)
+        if shutil.disk_usage(capture_dir).free < _CAPTURE_MIN_FREE_BYTES:
+            return
+        stamp = now.strftime("%H%M%S_%f")
+        recs = []
+        for i, (name, raw) in enumerate(items):
+            base = os.path.basename(name or "") or "body.mseed"
+            safe = re.sub(r"[^A-Za-z0-9._-]", "_", base)[:80] or "body.mseed"
+            fn = f"{stamp}_{i}_{safe}"
+            with open(os.path.join(day_dir, fn), "wb") as f:
+                f.write(raw)
+            recs.append({
+                "file": f"{now.strftime('%Y%m%d')}/{fn}",
+                "orig": name,
+                "bytes": len(raw),
+                "sha1": hashlib.sha1(raw).hexdigest(),
+            })
+        line = {
+            "utc": now.isoformat(),
+            "endpoint": endpoint,
+            "elapsed_ms": round(float(elapsed_ms), 1),
+            "items": recs,
+            "response": response_obj,
+        }
+        with open(os.path.join(capture_dir, "manifest.jsonl"), "a", encoding="utf-8") as f:
+            f.write(json.dumps(line, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001 —— 采集失败留痕即可
+        traceback.print_exc()
 
 
 # ---------------------------------------------------------------------------
@@ -295,7 +346,7 @@ def build_engine(args) -> Engine:
 # ---------------------------------------------------------------------------
 # FastAPI 应用
 # ---------------------------------------------------------------------------
-def create_app(engine: Engine, extra_route: Optional[str] = None):
+def create_app(engine: Engine, extra_route: Optional[str] = None, capture_dir: Optional[str] = None):
     if _FASTAPI_IMPORT_ERROR is not None:  # pragma: no cover
         raise SystemExit(
             f"API 服务需要 FastAPI：{_FASTAPI_IMPORT_ERROR!r}\n"
@@ -341,7 +392,7 @@ def create_app(engine: Engine, extra_route: Optional[str] = None):
                 content={"error": f"正文超过上限 {MAX_BODY_BYTES} 字节"},
             )
 
-        payloads: List[bytes] = []
+        payloads: List[tuple] = []  # [(原始文件名或None, 字节)]
         content_type = (request.headers.get("content-type") or "").lower()
         try:
             if "multipart/form-data" in content_type:
@@ -354,7 +405,7 @@ def create_app(engine: Engine, extra_route: Optional[str] = None):
                         continue  # 非文件字段忽略
                     data = await read(MAX_BODY_BYTES)
                     if data:
-                        payloads.append(data)
+                        payloads.append((getattr(value, "filename", None), data))
                 if not payloads:
                     # U21: 走到这说明请求确实按 multipart 发了（哪怕文件字段是
                     # 0 字节、或只有文本字段）——按"宁可空表"返回 200 {}；
@@ -367,13 +418,21 @@ def create_app(engine: Engine, extra_route: Optional[str] = None):
                         status_code=400,
                         content={"error": "未收到波形文件：请以 multipart files= 上传 .mseed"},
                     )
-                payloads.append(body)  # 兼容直接把 mseed 当 body POST
+                payloads.append((None, body))  # 兼容直接把 mseed 当 body POST
         except Exception:  # noqa: BLE001
             # C8: multipart/正文解析层的畸形输入（异常 boundary、截断头部……）
             # 也必须守住"绝不 5xx"契约——降级 200 {}，留 traceback 便于排查
             traceback.print_exc()
             return [], JSONResponse(content={})
         return payloads, None
+
+    def _capture_bg(endpoint, payloads, response_obj, elapsed_ms):
+        """采集开着才挂后台任务；响应先发、落盘在后——评测方零延迟感知。"""
+        if not capture_dir:
+            return None
+        return BackgroundTask(
+            capture_save, capture_dir, endpoint, payloads, response_obj, elapsed_ms
+        )
 
     async def _handle(request: Request):
         t0 = time.perf_counter()
@@ -382,7 +441,7 @@ def create_app(engine: Engine, extra_route: Optional[str] = None):
             return early
 
         merged: Dict[str, Dict[str, List[str]]] = {}
-        for raw in payloads:
+        for _name, raw in payloads:
             try:
                 # 必须进线程池：seisbench 的 classify 在"已有运行中事件循环"的
                 # 线程里无法 asyncio.run 自己的 classify_async（表现为
@@ -402,6 +461,7 @@ def create_app(engine: Engine, extra_route: Optional[str] = None):
         return JSONResponse(
             content=merged,
             headers={"X-Process-Time-Ms": f"{elapsed_ms:.1f}"},
+            background=_capture_bg("pick", payloads, merged, elapsed_ms),
         )
 
     async def _handle_mag(request: Request):
@@ -416,7 +476,7 @@ def create_app(engine: Engine, extra_route: Optional[str] = None):
             return early
 
         merged: Dict[str, Dict[str, List[float]]] = {}
-        for raw in payloads:
+        for _name, raw in payloads:
             try:
                 one = await run_in_threadpool(engine.process_mseed_bytes_magnitude, raw)
             except Exception:  # noqa: BLE001 —— 与 /pick 同契约：降级空表不 5xx
@@ -430,6 +490,7 @@ def create_app(engine: Engine, extra_route: Optional[str] = None):
         return JSONResponse(
             content=merged,
             headers={"X-Process-Time-Ms": f"{elapsed_ms:.1f}"},
+            background=_capture_bg("magnitude", payloads, merged, elapsed_ms),
         )
 
     # 报名时登记哪个路径都行：/、/pick、/predict 三个入口等价；
@@ -483,6 +544,11 @@ def make_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--mag-weights", default=None,
                     help="baseline 震级模型路径（默认 weights/official_r1_to_r2/"
                          "t2_magnitude_baseline.joblib）")
+    ap.add_argument("--capture-dir", default=None,
+                    help="请求采集目录：把评测方 POST 的原始波形+我们的响应落盘"
+                         "（响应发回后的后台任务写盘，评测方零延迟感知；磁盘余量"
+                         "<2GB 自动停采；存储异常绝不影响服务）。默认关闭；"
+                         "deploy_api.sh 默认开到 <仓库>/captured")
     ap.add_argument("--no-warmup", action="store_true")
     return ap
 
@@ -496,7 +562,9 @@ def main(argv=None) -> int:
         dt = engine.warmup()
         print(f"预热完成（{dt*1000:.0f}ms）")
 
-    app = create_app(engine, extra_route=args.route)
+    app = create_app(engine, extra_route=args.route, capture_dir=args.capture_dir)
+    if args.capture_dir:
+        print(f"请求采集已开启 -> {args.capture_dir}（后台落盘，不影响响应延迟）")
     try:
         import uvicorn
     except ImportError:
