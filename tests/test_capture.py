@@ -76,6 +76,22 @@ def test_cli_default_off():
     assert args.capture_dir is None
 
 
+def test_capture_records_real_client_ip_from_xff(tmp_path):
+    """APISIX/nginx 反代把 TCP 源 IP 改成内网地址，真实客户端 IP 只在
+    X-Forwarded-For 首段——评测日据此认出组委会流量。"""
+    cap = str(tmp_path / "capip")
+    c = TestClient(serve_api.create_app(StubEngine(), capture_dir=cap),
+                   raise_server_exceptions=False)
+    c.post("/pick", files={"file": ("committee.mseed", b"xx")},
+           headers={"X-Forwarded-For": "221.11.98.193, 10.230.11.1"})
+    rec = json.loads(open(os.path.join(cap, "manifest.jsonl"), encoding="utf-8").readlines()[-1])
+    assert rec["client_ip"] == "221.11.98.193"  # 取首段=最初客户端，非中间代理
+    # X-Real-IP 兜底
+    c.post("/pick", files={"file": ("x.mseed", b"yy")}, headers={"X-Real-IP": "1.2.3.4"})
+    rec2 = json.loads(open(os.path.join(cap, "manifest.jsonl"), encoding="utf-8").readlines()[-1])
+    assert rec2["client_ip"] == "1.2.3.4"
+
+
 if __name__ == "__main__":
     import subprocess
 

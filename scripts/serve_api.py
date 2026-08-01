@@ -114,8 +114,11 @@ except ImportError as _exc:  # noqa: N816
 _CAPTURE_MIN_FREE_BYTES = 2 * 1024 ** 3  # 剩余磁盘低于 2GB 即停采，保服务不保数据
 
 
-def capture_save(capture_dir, endpoint, items, response_obj, elapsed_ms):
-    """items: [(原始文件名, 字节)]。写波形文件 + 追加 manifest.jsonl 一行。"""
+def capture_save(capture_dir, endpoint, items, response_obj, elapsed_ms, client_ip=None):
+    """items: [(原始文件名, 字节)]。写波形文件 + 追加 manifest.jsonl 一行。
+
+    client_ip: 经 X-Forwarded-For 还原的真实客户端 IP（评测日据此认出组委会流量；
+    公网代理 APISIX 会把 TCP 源 IP 改写成内网地址，真实 IP 只在转发头里）。"""
     try:
         from datetime import datetime, timezone as _tz
 
@@ -141,6 +144,7 @@ def capture_save(capture_dir, endpoint, items, response_obj, elapsed_ms):
         line = {
             "utc": now.isoformat(),
             "endpoint": endpoint,
+            "client_ip": client_ip,
             "elapsed_ms": round(float(elapsed_ms), 1),
             "items": recs,
             "response": response_obj,
@@ -149,6 +153,19 @@ def capture_save(capture_dir, endpoint, items, response_obj, elapsed_ms):
             f.write(json.dumps(line, ensure_ascii=False) + "\n")
     except Exception:  # noqa: BLE001 —— 采集失败留痕即可
         traceback.print_exc()
+
+
+def client_ip_of(request) -> Optional[str]:
+    """从请求还原真实客户端 IP。APISIX/nginx 类反代把 TCP 源 IP 改成内网地址，
+    真实 IP 在 X-Forwarded-For（逗号分隔，第一个是最初客户端）或 X-Real-IP。"""
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    xr = request.headers.get("x-real-ip")
+    if xr:
+        return xr.strip()
+    client = getattr(request, "client", None)
+    return getattr(client, "host", None) if client else None
 
 
 # ---------------------------------------------------------------------------
@@ -484,12 +501,12 @@ def create_app(engine: Engine, extra_route: Optional[str] = None, capture_dir: O
             return [], JSONResponse(content={})
         return payloads, None
 
-    def _capture_bg(endpoint, payloads, response_obj, elapsed_ms):
+    def _capture_bg(endpoint, payloads, response_obj, elapsed_ms, client_ip=None):
         """采集开着才挂后台任务；响应先发、落盘在后——评测方零延迟感知。"""
         if not capture_dir:
             return None
         return BackgroundTask(
-            capture_save, capture_dir, endpoint, payloads, response_obj, elapsed_ms
+            capture_save, capture_dir, endpoint, payloads, response_obj, elapsed_ms, client_ip
         )
 
     async def _handle(request: Request):
@@ -519,7 +536,7 @@ def create_app(engine: Engine, extra_route: Optional[str] = None, capture_dir: O
         return JSONResponse(
             content=merged,
             headers={"X-Process-Time-Ms": f"{elapsed_ms:.1f}"},
-            background=_capture_bg("pick", payloads, merged, elapsed_ms),
+            background=_capture_bg("pick", payloads, merged, elapsed_ms, client_ip_of(request)),
         )
 
     async def _handle_mag(request: Request):
@@ -548,7 +565,7 @@ def create_app(engine: Engine, extra_route: Optional[str] = None, capture_dir: O
         return JSONResponse(
             content=merged,
             headers={"X-Process-Time-Ms": f"{elapsed_ms:.1f}"},
-            background=_capture_bg("magnitude", payloads, merged, elapsed_ms),
+            background=_capture_bg("magnitude", payloads, merged, elapsed_ms, client_ip_of(request)),
         )
 
     async def _handle_cls(request: Request):
@@ -577,7 +594,7 @@ def create_app(engine: Engine, extra_route: Optional[str] = None, capture_dir: O
         return JSONResponse(
             content=merged,
             headers={"X-Process-Time-Ms": f"{elapsed_ms:.1f}"},
-            background=_capture_bg("classify", payloads, merged, elapsed_ms),
+            background=_capture_bg("classify", payloads, merged, elapsed_ms, client_ip_of(request)),
         )
 
     # 报名时登记哪个路径都行：/、/pick、/predict 三个入口等价；
