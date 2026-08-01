@@ -49,6 +49,41 @@ class BaselineJoblibClassifier:
         return [[cls] for _ in inp.waveforms]
 
 
+class SeismicXMClassifier:
+    """SeismicXM(middle) 深度特征 + 逻辑回归的在线封装。
+
+    去年真题验收：第1轮训练→第2轮盲测 94.2%（joblib 基线 81.5%），见
+    scripts/train_seismicxm_t3.py。bundle 由该脚本产出，内含 sklearn Pipeline
+    与 encoder_weights 相对路径；编码器（51.9M Transformer，CPU 单文件约
+    0.2s）构建一次全程复用。类别语义与 baseline 相同（1..5 整数）。
+    """
+
+    name = "seismicxm"
+    needs_picks = False
+
+    def __init__(self, bundle_path: str, encoder_weights: Optional[str] = None):
+        import joblib
+
+        bundle = joblib.load(bundle_path)
+        if bundle.get("task") != "T3" or "pipeline" not in bundle:
+            raise ValueError(f"不是有效的 T3 seismicxm bundle：{bundle_path}")
+        self._pipeline = bundle["pipeline"]
+        from .tasks.seismicxm_features import SeismicXMEncoder
+
+        self._encoder = SeismicXMEncoder(encoder_weights or bundle.get("encoder_weights"))
+
+    def class_for_stream(self, stream) -> int:
+        vec = self._encoder.encode_stream(stream)
+        return int(self._pipeline.predict(vec[None])[0])
+
+    def estimate(self, inp: MagnitudeInput) -> List[List[int]]:
+        if not inp.waveforms:
+            return []
+        stream = inp.stream if inp.stream is not None else _waveforms_to_pseudo_stream(inp.waveforms)
+        cls = self.class_for_stream(stream)
+        return [[cls] for _ in inp.waveforms]
+
+
 def build_classifier(kind: str, model_path: Optional[str] = None):
     """serve_api CLI --cls-model 的接线点；``off``/空 返回 None（API 层 501）。"""
     kind = (kind or "off").strip().lower()
@@ -58,4 +93,8 @@ def build_classifier(kind: str, model_path: Optional[str] = None):
         if not model_path:
             raise ValueError("baseline 分类模型需要 --cls-weights 指向 t3_event_baseline.joblib")
         return BaselineJoblibClassifier(model_path)
-    raise ValueError(f"未知分类模型：{kind}（可选 baseline / off）")
+    if kind == "seismicxm":
+        if not model_path:
+            raise ValueError("seismicxm 分类模型需要 --cls-weights 指向 t3_seismicxm_*.joblib")
+        return SeismicXMClassifier(model_path)
+    raise ValueError(f"未知分类模型：{kind}（可选 seismicxm / baseline / off）")

@@ -31,3 +31,6 @@ captured/
 
 *.csv
 /content/ethz_100hz_subset.hdf5
+
+# SeismicXM 预训练权重（2GB，Google Drive 下载，见 memory/训练脚本注释）
+weights/seismicxm/

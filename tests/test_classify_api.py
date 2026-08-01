@@ -70,8 +70,29 @@ def test_classify_payload_contract():
 
 def test_cli_defaults_classify_on():
     args = serve_api.make_arg_parser().parse_args([])
-    assert args.cls_model == "baseline"
+    assert args.cls_model == "seismicxm"  # 2026-08 起默认深度分类器（r2 留出 94.2%）
     assert args.cls_weights is None
+
+
+def test_real_seismicxm_model_loads_and_predicts_int():
+    """seismicxm 真模型冒烟：bundle 可载、合成波形出 1..5 整数类别。"""
+    pytest.importorskip("sklearn")
+    pytest.importorskip("einops")
+    np = pytest.importorskip("numpy")
+    from phasepicker.classification import build_classifier
+    from phasepicker.magnitude import MagnitudeInput
+    from phasepicker.types import Waveform
+
+    root = os.path.join(os.path.dirname(__file__), "..")
+    bundle = os.path.join(root, "weights", "official_r1_to_r2", "t3_seismicxm_r1r2.joblib")
+    enc_w = os.path.join(root, "weights", "seismicxm", "seismicxm.middle.pt")
+    if not (os.path.exists(bundle) and os.path.exists(enc_w)):
+        pytest.skip("seismicxm bundle/权重不在本机")
+    est = build_classifier("seismicxm", bundle)
+    wf = Waveform(data=np.random.default_rng(0).standard_normal((3, 6000)).astype("float32"),
+                  sampling_rate=100.0, starttime_utc=0.0, station="XB.TST")
+    out = est.estimate(MagnitudeInput(waveforms=[wf], picks_per_wf=[[]]))
+    assert len(out) == 1 and len(out[0]) == 1 and out[0][0] in {1, 2, 3, 4, 5}
 
 
 def test_real_t3_model_loads_and_predicts_int():

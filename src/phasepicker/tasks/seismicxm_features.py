@@ -1,0 +1,96 @@
+"""SeismicXM(middle) 特征编码器——T3 深度分类的共享预处理与前向.
+
+训练（scripts/train_seismicxm_t3.py）与在线推理（classification.SeismicXMClassifier）
+都从这里取 prep_window / SeismicXMEncoder，保证两侧预处理逐字节一致——
+训练/推理预处理不一致是这类特征模型最隐蔽的翻车点。
+
+预处理约定 = 上游作者 makejit.picker.py 的导出约定（不可改，改了就与预训练
+分布脱节）：ENZ 通道序、逐道 demean、除以最大绝对值、10240 点窗口；
+超长波形取 Z 道能量峰居中的窗，不足零填充。
+
+A/B 依据（2026-08-01，去年真题）：hidden[:,:,0] 1024 维 + 标准化逻辑回归，
+第1轮训练→第2轮盲测 94.2%，手工 60 维 joblib 基线 81.5%。
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Dict, Tuple
+
+import numpy as np
+
+WIN = 10240
+DEFAULT_WEIGHTS = os.path.join(
+    os.path.dirname(__file__), "..", "..", "..", "weights", "seismicxm", "seismicxm.middle.pt"
+)
+
+
+def prep_window(components: Dict[str, Tuple[float, np.ndarray]], default_sr: float) -> np.ndarray:
+    """把 stream_to_components 的输出拼成 (3, 10240) 模型输入，通道序 E,N,Z。"""
+    z_sr, z_data = components.get("Z", (default_sr, np.zeros(1)))
+    z = np.asarray(z_data, dtype=np.float64)
+    n = z.size
+    if n > WIN:
+        peak = int(np.argmax(np.abs(z))) if n else 0
+        start = min(max(0, peak - WIN // 2), n - WIN)
+    else:
+        start = 0
+    chans = []
+    for comp in ("E", "N", "Z"):
+        _, data = components.get(comp, (default_sr, np.zeros(1)))
+        x = np.asarray(data, dtype=np.float64).reshape(-1)
+        x = np.where(np.isfinite(x), x, 0.0)
+        seg = x[start:start + WIN] if x.size > WIN else x
+        out = np.zeros(WIN, dtype=np.float32)
+        out[: seg.size] = seg[:WIN]
+        out -= out.mean()
+        out /= (np.abs(out).max() + 1e-6)
+        chans.append(out)
+    return np.stack(chans, axis=0)
+
+
+class SeismicXMEncoder:
+    """懒加载的 middle 模型封装：stream → 1024 维特征向量。
+
+    模型 51.9M 参数、权重约 208MB，构建一次全程复用；forward 无梯度。
+    torch/einops 缺失或权重不存在时在构造期抛清晰中文错误。
+    """
+
+    def __init__(self, weights_path: str | None = None, device: str | None = None):
+        try:
+            import torch
+        except ImportError as exc:  # pragma: no cover
+            raise RuntimeError("SeismicXM 编码器需要 PyTorch，请先 pip install torch") from exc
+        try:
+            from ..vendor.seismicxm_middle import SeismicXM
+        except ImportError as exc:  # pragma: no cover
+            raise RuntimeError("SeismicXM 依赖 einops，请先 pip install einops") from exc
+
+        path = os.path.abspath(weights_path or DEFAULT_WEIGHTS)
+        if not os.path.exists(path):
+            raise FileNotFoundError(
+                f"SeismicXM 权重不存在：{path}（从 Google Drive 下载 seismicxm.middle.pt，"
+                "见 https://github.com/cangyeone/seismicxm）"
+            )
+        self._torch = torch
+        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        model = SeismicXM()
+        model.load_state_dict(torch.load(path, map_location=self.device))
+        model.to(self.device).eval()
+        self._model = model
+        self.weights_path = path
+
+    def encode_window(self, window: np.ndarray) -> np.ndarray:
+        """(3, 10240) → (1024,) 特征向量（README 推荐的 hidden[:, :, 0]）。"""
+        torch = self._torch
+        x = torch.tensor(window[None], dtype=torch.float32, device=self.device)
+        with torch.no_grad():
+            _, _, _, _, hidden = self._model(x)
+        return hidden[0, :, 0].cpu().numpy().astype(np.float32)
+
+    def encode_stream(self, stream) -> np.ndarray:
+        """ObsPy Stream（或伪 stream）→ (1024,) 特征向量。"""
+        from .waveform_features import stream_to_components
+
+        components, default_sr = stream_to_components(stream)
+        return self.encode_window(prep_window(components, default_sr))

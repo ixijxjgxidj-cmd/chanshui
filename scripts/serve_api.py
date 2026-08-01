@@ -405,16 +405,35 @@ def build_engine(args) -> Engine:
             from phasepicker.classification import build_classifier
 
             cls_path = getattr(args, "cls_weights", None)
-            if ckind == "baseline" and not cls_path:
-                cls_path = os.path.join(
-                    os.path.dirname(__file__), "..",
-                    "weights", "official_r1_to_r2", "t3_event_baseline.joblib",
-                )
+            if not cls_path:
+                default_cls = {
+                    "baseline": "t3_event_baseline.joblib",
+                    "seismicxm": "t3_seismicxm_r1r2.joblib",
+                }.get(ckind)
+                if default_cls:
+                    cls_path = os.path.join(
+                        os.path.dirname(__file__), "..",
+                        "weights", "official_r1_to_r2", default_cls,
+                    )
             cls = build_classifier(ckind, cls_path)
             print(f"分类器: {ckind} 已就绪")
         except Exception:  # noqa: BLE001
             traceback.print_exc()
-            print(f"!! 分类器 {ckind!r} 构建失败，/classify 将返回 501；/pick 不受影响")
+            if ckind == "seismicxm":
+                # 缺 seismicxm 权重/依赖时回退 baseline，保住 81.5% 而非 501
+                try:
+                    from phasepicker.classification import build_classifier
+
+                    cls = build_classifier("baseline", os.path.join(
+                        os.path.dirname(__file__), "..",
+                        "weights", "official_r1_to_r2", "t3_event_baseline.joblib",
+                    ))
+                    print("!! seismicxm 构建失败，已回退 baseline 分类器（81.5%）")
+                except Exception:  # noqa: BLE001
+                    traceback.print_exc()
+                    print("!! 分类器构建失败，/classify 将返回 501；/pick 不受影响")
+            else:
+                print(f"!! 分类器 {ckind!r} 构建失败，/classify 将返回 501；/pick 不受影响")
     return Engine(picker, mag_estimator=mag, cls_estimator=cls)
 
 
@@ -650,12 +669,14 @@ def make_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--mag-weights", default=None,
                     help="baseline 震级模型路径（默认 weights/official_r1_to_r2/"
                          "t2_magnitude_baseline.joblib）")
-    ap.add_argument("--cls-model", default="baseline", choices=["baseline", "off"],
-                    help="/classify 端点的分类器：baseline=去年 T3 特征树"
-                         "（r2 留出准确率 81.5%%，整文件一个类别 1..5）；off=501。"
-                         "构建失败自动降级，绝不影响 /pick")
+    ap.add_argument("--cls-model", default="seismicxm", choices=["seismicxm", "baseline", "off"],
+                    help="/classify 端点的分类器：seismicxm=深度特征+逻辑回归"
+                         "（r2 留出准确率 94.2%%，需 weights/seismicxm/ 权重）；"
+                         "baseline=去年 T3 特征树（81.5%%）；off=501。"
+                         "构建失败自动降级到 501，绝不影响 /pick")
     ap.add_argument("--cls-weights", default=None,
-                    help="baseline 分类模型路径（默认 weights/official_r1_to_r2/"
+                    help="分类模型路径（默认 weights/official_r1_to_r2/ 下按 "
+                         "--cls-model 选 t3_seismicxm_r1r2.joblib 或 "
                          "t3_event_baseline.joblib）")
     ap.add_argument("--capture-dir", default=None,
                     help="请求采集目录：把评测方 POST 的原始波形+我们的响应落盘"
