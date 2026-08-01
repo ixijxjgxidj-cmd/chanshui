@@ -40,7 +40,7 @@ def save_bundle(path, pipeline, meta):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--features", default="outputs/seismicxm_t2/features_t2.npz")
+    ap.add_argument("--features", default="outputs/seismicxm_t3/features_tta.npz")
     ap.add_argument("--outdir", default="weights/official_r1_to_r2")
     ap.add_argument("--weights", default="weights/seismicxm/seismicxm.middle.pt")
     ap.add_argument("--verify", action="store_true")
@@ -48,7 +48,10 @@ def main() -> int:
     args = ap.parse_args()
 
     z = np.load(args.features)
-    Xd_tr, y_tr, Xd_ev, y_ev = z["Xd_tr"], z["y_tr"], z["Xd_ev"], z["y_ev"]
+    if "X1t2" in z:  # TTA 缓存
+        Xd_tr, y_tr, Xd_ev, y_ev = z["X1t2"], z["y1t2"], z["X2t2"], z["y2t2"]
+    else:  # 旧单窗缓存
+        Xd_tr, y_tr, Xd_ev, y_ev = z["Xd_tr"], z["y_tr"], z["Xd_ev"], z["y_ev"]
     print(f"特征载入：r1 {Xd_tr.shape} / r2 {Xd_ev.shape}")
     os.makedirs(args.outdir, exist_ok=True)
     meta = {"feature_dim": int(Xd_tr.shape[1]),
@@ -74,7 +77,7 @@ def main() -> int:
         from phasepicker.io.official_waveforms import read_package_answers, read_mseed_stream
         from phasepicker.tasks.seismicxm_features import SeismicXMEncoder
         from phasepicker.tasks.waveform_features import stream_to_components
-        from phasepicker.tasks.seismicxm_features import prep_window
+        from phasepicker.tasks.seismicxm_features import tta_windows
 
         enc = SeismicXMEncoder(args.weights)
         answers = read_package_answers(args.eval_zip, ExamTask.T2)
@@ -85,7 +88,7 @@ def main() -> int:
         t0 = time.perf_counter()
         for i, s in enumerate(samples, 1):
             components, sr = stream_to_components(read_mseed_stream(s.source_path))
-            vec = enc.encode_window(prep_window(components, sr))
+            vec = np.mean([enc.encode_window(w) for w in tta_windows(components, sr)], axis=0)
             m = float(np.clip(p1.predict(vec[None])[0], 0.0, 9.9))
             errs.append(abs(m - float(answers[s.file_id].magnitude)))
             if i % 50 == 0 or i == len(samples):
