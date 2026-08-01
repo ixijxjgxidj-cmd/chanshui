@@ -34,3 +34,8 @@ captured/
 
 # SeismicXM 预训练权重（2GB，Google Drive 下载，见 memory/训练脚本注释）
 weights/seismicxm/
+
+# USTC-Pickers 区域权重: 只入库实测胜出的 guangxi/huanan 转换版, 其余本地保留
+weights/ustc_pickers/*
+!weights/ustc_pickers/guangxi_sd.pt
+!weights/ustc_pickers/huanan_sd.pt
