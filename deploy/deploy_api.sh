@@ -16,6 +16,8 @@
 #   PYTHON_BIN=python3         # 老镜像装了 python3.12 时指定，如 PYTHON_BIN=python3.12
 #   THREADS=2                  # CPU 推理线程数（含 OMP_NUM_THREADS）。实测 2 线程最优，
 #                              #  满核反而更慢（seisbench issue #68/#202 同结论），一般别改
+#   DEVICE=cpu                 # cpu / cuda。GPU 机传 DEVICE=cuda：改装 CUDA 版 torch
+#                              #  并以 --device cuda 启动（fp16 仍默认关，须同分验证后才开）
 #
 # 依赖版本锁定在 deploy/requirements.lock（本地彩排验证过的精确版本）；
 # 要求 python >= 3.12（Ubuntu 24.04 自带；老镜像先装 python3.12 再 PYTHON_BIN 指定）。
@@ -43,6 +45,7 @@ PYBIN="${PYTHON_BIN:-python3}"
 #   速度非瓶颈）。--threads 管 torch 线程，OMP_NUM_THREADS 管底层 BLAS/OpenMP。
 THREADS="${THREADS:-2}"
 export OMP_NUM_THREADS="$THREADS"
+DEVICE="${DEVICE:-cpu}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -72,9 +75,24 @@ echo "==================== [2/6] 虚拟环境与 Python 依赖（按 lock 锁定
 [ -d "$VENV" ] || "$PYBIN" -m venv "$VENV"
 "$PY" -m pip install -q --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-# torch 钉死 2.12.1（本地彩排版本），优先官方 CPU-only 轮子（~200MB）；
-# 官方 cpu 源不通时回退清华 PyPI（带 CUDA 的大包 ~2GB+，慢但国内稳，版本同样钉死）。
-if ! "$PY" -c "import torch; assert torch.__version__.split('+')[0] == '2.12.1'" 2>/dev/null; then
+# torch 钉死 2.12.1（本地彩排版本）。CPU 机优先官方 CPU-only 轮子（~200MB），
+# 失败回退清华 PyPI；GPU 机（DEVICE=cuda）直接装清华 PyPI 的完整轮子（带 CUDA，
+# ~2GB+，国内快），装完自检 cuda 可用性——不可用只告警并继续（服务端 --device cuda
+# 会自动退化 cpu，见 picker._resolve_device，绝不因此拒绝上线）。
+if [ "$DEVICE" = "cuda" ]; then
+  if ! "$PY" -c "import torch; assert torch.__version__.split('+')[0] == '2.12.1' and torch.cuda.is_available()" 2>/dev/null; then
+    echo "安装 torch==2.12.1（CUDA 版，清华源）..."
+    "$PY" -m pip install -q "torch==2.12.1" -i https://pypi.tuna.tsinghua.edu.cn/simple
+  fi
+  "$PY" - <<'PYEOF'
+import torch
+if torch.cuda.is_available():
+    print("CUDA 可用:", torch.cuda.get_device_name(0))
+else:
+    print("!! DEVICE=cuda 但 torch.cuda 不可用（驱动缺失?）——服务会自动退化 CPU 运行")
+    print("!! GPU 机需已装 NVIDIA 驱动: nvidia-smi 先能跑通")
+PYEOF
+elif ! "$PY" -c "import torch; assert torch.__version__.split('+')[0] == '2.12.1'" 2>/dev/null; then
   echo "安装 torch==2.12.1（先试官方 CPU 轮子，失败回退清华源）..."
   "$PY" -m pip install -q "torch==2.12.1" --index-url https://download.pytorch.org/whl/cpu \
     || "$PY" -m pip install -q "torch==2.12.1" -i https://pypi.tuna.tsinghua.edu.cn/simple
@@ -106,7 +124,7 @@ EXTRA_ARGS=""
 [ -n "$S_THRESHOLD" ] && EXTRA_ARGS="$EXTRA_ARGS --s-threshold $S_THRESHOLD"
 [ -n "$P_MERGE_WINDOW" ] && EXTRA_ARGS="$EXTRA_ARGS --p-merge-window $P_MERGE_WINDOW"
 [ -n "$S_MERGE_WINDOW" ] && EXTRA_ARGS="$EXTRA_ARGS --s-merge-window $S_MERGE_WINDOW"
-START_CMD="$PY $REPO_ROOT/scripts/serve_api.py --pretrained $PRETRAINED --device cpu --host 0.0.0.0 --port $PORT --threads $THREADS$EXTRA_ARGS"
+START_CMD="$PY $REPO_ROOT/scripts/serve_api.py --pretrained $PRETRAINED --device $DEVICE --host 0.0.0.0 --port $PORT --threads $THREADS$EXTRA_ARGS"
 echo "启动命令: $START_CMD"
 
 # 无论走哪条分支，先按 PID 文件把上一轮 nohup 兜底进程清干净：

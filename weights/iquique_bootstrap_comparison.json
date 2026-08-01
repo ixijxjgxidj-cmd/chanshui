@@ -1,0 +1,59 @@
+{
+  "dataset": "Iquique",
+  "sampling_rate_hz": 50,
+  "holdout_windows": 150,
+  "weights": {
+    "epoch5_best": {
+      "path": "weights/phasenet_iquique_bootstrap_epoch5_best.pt",
+      "sha256": "1b45090f1905f682366acbd36e75787f1f4fc1e2992a2f9a7a611083ce64460c"
+    },
+    "epoch10_best": {
+      "path": "weights/phasenet_iquique_bootstrap_best.pt",
+      "sha256": "04e0f955fa41cd6491d98a56e00094685bea71900b4bfd2867d652085c294f6c"
+    }
+  },
+  "scores": {
+    "diting_base": {
+      "mean_score": 1.5119259259259257,
+      "p_res": 0.14190476190476192,
+      "s_res": 0.4222764227642277,
+      "p_hit": 0.5510204081632653,
+      "s_hit": 0.3983739837398374,
+      "n": 150,
+      "n_pred": 299,
+      "n_noise": 0,
+      "noise_fp_per_win": null
+    },
+    "epoch5_best": {
+      "mean_score": 1.6179999999999997,
+      "p_res": 0.11919463087248323,
+      "s_res": 0.29600000000000043,
+      "p_hit": 0.6308724832214765,
+      "s_hit": 0.504,
+      "n": 150,
+      "n_pred": 305,
+      "n_noise": 0,
+      "noise_fp_per_win": null
+    },
+    "epoch10_best": {
+      "mean_score": 1.643185185185185,
+      "p_res": 0.11543624161073832,
+      "s_res": 0.2834920634920638,
+      "p_hit": 0.6308724832214765,
+      "s_hit": 0.5555555555555556,
+      "n": 150,
+      "n_pred": 300,
+      "n_noise": 0,
+      "noise_fp_per_win": null
+    }
+  },
+  "delta_epoch10_vs_epoch5": {
+    "tensor_keys_compared": 111,
+    "elements_compared": 269693,
+    "tensors_changed": 21,
+    "mean_abs_delta": 0.012029188809799442,
+    "rmse_delta": 0.01712572251495299,
+    "max_abs_delta": 0.28449344635009766,
+    "state_cosine_similarity": 0.9999999999947532
+  }
+}

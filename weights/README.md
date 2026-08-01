@@ -9,6 +9,7 @@
 |---|---|---|---|
 | `phasenet_diting_weights.tar.gz` | seisbench 官方 diting 预训练缓存包（USTC 271 万条中国 DiTing；原生 50Hz、窗 60.02s），供 `deploy_api.sh`/`setup.sh` 离线恢复，零微调 | 真题第1轮 1000 条 **1.629** / 第2轮 915 条 **1.500**（阈值 0.3）；新默认阈值 0.2/0.15 下 **1.717 / 1.654** | **部署候选（当前基座）** |
 | `phasenet_stead_weights.tar.gz` | seisbench 官方 stead 预训练缓存包（100Hz），同上离线恢复 | 真题第1轮前 200 条 1.496 | 留档（应急 fallback） |
+| `phasenet_iquique_bootstrap_best.pt` / `_epoch5_best.pt` | **diting 基座**微调（50Hz 新管线）；Iquique 445MB 池，10/5 epochs（testttt1 仓库产出，2026-08-01 收编） | Iquique 自留出集 1.512→**1.643**(e10)/1.618(e5)；**真题全量倒退**：两轮合计 1.6264(e10)/1.6150(e5) vs diting 1.7019；扫遍 16 组阈值最高 1.894 仍 < diting 同 300 条 1.922 | 留档（**Iquique 域增益不迁移中国真题的第二次铁证**——微调只认中国域/官方样例数据） |
 | `phasenet_iquique_full_best.pt` | stead 微调；Iquique 全量 13327 条，lr 3e-5 × 5 epochs，batch 16，按 key 85/15 切分 | 留出集 1.3113→**1.4285**（P 满分率 72→90%、S 64→69%）；真题第1轮前 200 条 1.678 | 留档（stead 系整线被 diting 1.899 压制） |
 | `phasenet_iquique_full_sw8_best.pt` | 同上 + `--s-weight 8` 实验 | 留出集 1.4294（与不加权持平，S 满分率 69→68%） | **已判无效**（S 瓶颈不在 loss 权重，勿再试加权） |
 | `phasenet_iquique_8k_best.pt` | stead 微调；Iquique 8000 条 | 留出集 1.2012→1.3273（P 满分率 55→70%，S 61→56% 退步） | 留档（被全量版取代） |
