@@ -5,9 +5,9 @@
 
 ## 本批次上线内容（本地已全部验收，git 已提交）
 
-| 组件 | 变化 | 验收成绩（去年第2轮盲测） |
+| 组件 | 变化 | 验收成绩 |
 |---|---|---|
-| T1 拾取 | diting → **广西+江西+山东 概率集成** + 亚采样精细化 | 均分 1.669→**1.723**（r1 同验 1.732→1.744） |
+| T1 拾取 | diting → **5成员概率集成 + 短文件限额 + 长记录SNR闸**（2026-08-10 定稿） | 三分布盲测 r1 **1.770** / r2 **1.776** / 08决赛 **1.960**，且与 fork 基准逐位一致 |
 | T2 震级 | joblib 特征树 → **SeismicXM deep1024+Ridge** | MAE 0.817→**0.621** |
 | T3 分类 | joblib 特征树 → **SeismicXM TTA+余弦kNN(k=5)** | 81.5%→**98.9%** |
 
@@ -15,6 +15,7 @@
 
 - `weights/seismicxm/seismicxm.middle.pt`（**208MB**，不在 git；scp/rsync 上去）
 - `git pull` 带上：`weights/ustc_pickers/guangxi_sd.pt`、
+  `weights/aug/{exam_aug6,crew_sp23}_r2train_sd.pt`（T1 集成第4/5成员，已在 git）、
   `weights/official_r1_to_r2/t{2,3}_seismicxm_r1r2.joblib`、
   `src/phasepicker/vendor/`（SeismicXM 模型定义）及全部代码改动
 
@@ -25,15 +26,18 @@ pip install einops           # SeismicXM 唯一新依赖
 git pull
 # 权重就位检查（缺 seismicxm 会自动回退旧 baseline 不报错——要看启动日志！）
 ls -la weights/seismicxm/seismicxm.middle.pt weights/ustc_pickers/*_sd.pt \
-      weights/official_r1_to_r2/t2_seismicxm_r1r2.joblib
-# 启动（T1 = 三区域概率集成，2026-08-02 定稿：两轮均超最优单模型）
-python scripts/serve_api.py --port 8000 --weights "guangxi,jiangxi,shandong"
+      weights/aug/*_sd.pt weights/official_r1_to_r2/t2_seismicxm_r1r2.joblib
+# 启动（T1 生产配置 2026-08-10 定稿：5成员集成 + 短文件限额 + SNR闸,
+#       三分布验收 r1 1.770 / r2 1.776 / 08 1.960）
+python scripts/serve_api.py --port 8000 \
+  --weights "guangxi,jiangxi,shandong,weights/aug/exam_aug6_r2train_sd.pt,weights/aug/crew_sp23_r2train_sd.pt" \
+  --cap-short-s 300 --cap-max-p 1 --cap-max-s 1 --long-snr-db -1.0
 ```
 
 ## 启动日志必须出现（缺一不可，出现"回退"字样=权重没就位）
 
 ```
-拾取器: 概率集成 × 3 成员 ['guangxi', 'jiangxi', 'shandong']
+拾取器: 概率集成 × 5 成员 ['guangxi', 'jiangxi', 'shandong', 'weights/aug/exam_aug6_r2train_sd.pt', 'weights/aug/crew_sp23_r2train_sd.pt']
 震级估计器: seismicxm 已就绪
 分类器: seismicxm 已就绪
 ```
