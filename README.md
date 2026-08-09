@@ -19,12 +19,19 @@
 对应入口：
 
 ```bash
-# 起官方标准 API（模型常驻 + 预热 + 多台站合批推理）
-# 默认基座/阈值统一取自 src/phasepicker/defaults.py：diting + P=0.2 / S=0.15
-#（去年真题 A/B：diting 1.899 > stead 1.496，见 deploy/README.md；勿再用 stead 起服务）
+# 起官方标准 API —— 评测日生产配置（2026-08-10 定稿，全部参数显式写出）
+# T1 = 5成员概率集成 + 短文件限额 + SNR闸 + 强制成对兜底 + 长记录去重
+# 三分布盲测: 去年r1 1.779 / 去年r2 1.801 / 去年决赛08 2.009（每文件满分2）
 pip install fastapi uvicorn python-multipart requests
-python scripts/serve_api.py --port 8000                                  # 保底（diting 零微调）
-python scripts/serve_api.py --weights weights/<best>.pt --port 8000      # P2 微调权重（先过 ab_compare）
+python scripts/serve_api.py --port 8000 \
+  --weights "guangxi,jiangxi,shandong,weights/aug/exam_aug6_r2train_sd.pt,weights/aug/crew_sp23_r2train_sd.pt" \
+  --cap-short-s 300 --cap-max-p 1 --cap-max-s 1 --long-snr-db -1.0 \
+  --force-pair-short-s 300 --long-dedup-s 20
+
+# 保底命令（依赖/权重出问题时的降级链，分数递减）：
+python scripts/serve_api.py --port 8000 --weights "guangxi,jiangxi,shandong"  # 3成员
+python scripts/serve_api.py --port 8000 --weights weights/ustc_pickers/guangxi_sd.pt  # 单模型
+python scripts/serve_api.py --port 8000                                       # diting 零微调
 
 # 提交前自检：状态码 / JSON 结构 / ISO 到时格式 / 升序，全对才算过
 python scripts/check_api.py --url http://<公网IP>:8000/pick --input <mseed目录或zip>

@@ -7,9 +7,12 @@
 
 | 组件 | 变化 | 验收成绩 |
 |---|---|---|
-| T1 拾取 | diting → **5成员概率集成 + 短文件限额 + 长记录SNR闸**（2026-08-10 定稿） | 三分布盲测 r1 **1.770** / r2 **1.776** / 08决赛 **1.960**，且与 fork 基准逐位一致 |
+| T1 拾取 | diting → **5成员概率集成 + 短文件限额 + SNR闸 + 强制成对兜底 + 长记录去重**（2026-08-10 定稿） | 三分布盲测 r1 **1.779** / r2 **1.801** / 08决赛 **2.009** |
 | T2 震级 | joblib 特征树 → **SeismicXM deep1024+Ridge** | MAE 0.817→**0.621** |
 | T3 分类 | joblib 特征树 → **SeismicXM TTA+余弦kNN(k=5)** | 81.5%→**98.9%** |
+
+已证否勿再试（2026-08-10 实验记录）：TTA 极性翻转（r2 −0.4 且 2× 耗时）、
+overlap 0.75（r2 −2.1）、overlap 0.9（r2 +6.5 但 08 −2.4 三分布不同向，5× 耗时）。
 
 ## 需要新上传到容器的文件
 
@@ -27,11 +30,13 @@ git pull
 # 权重就位检查（缺 seismicxm 会自动回退旧 baseline 不报错——要看启动日志！）
 ls -la weights/seismicxm/seismicxm.middle.pt weights/ustc_pickers/*_sd.pt \
       weights/aug/*_sd.pt weights/official_r1_to_r2/t2_seismicxm_r1r2.joblib
-# 启动（T1 生产配置 2026-08-10 定稿：5成员集成 + 短文件限额 + SNR闸,
-#       三分布验收 r1 1.770 / r2 1.776 / 08 1.960）
+# 启动（T1 生产配置 2026-08-10 定稿：5成员集成 + 短文件限额 + SNR闸 +
+#       强制成对兜底 + 长记录去重(20s)，三分布 r1 1.779 / r2 1.801 / 08 2.009。
+#       cap/SNR/force-pair/long-dedup 均为 serve_api 默认值，显式写出防误改）
 python scripts/serve_api.py --port 8000 \
   --weights "guangxi,jiangxi,shandong,weights/aug/exam_aug6_r2train_sd.pt,weights/aug/crew_sp23_r2train_sd.pt" \
-  --cap-short-s 300 --cap-max-p 1 --cap-max-s 1 --long-snr-db -1.0
+  --cap-short-s 300 --cap-max-p 1 --cap-max-s 1 --long-snr-db -1.0 \
+  --force-pair-short-s 300 --long-dedup-s 20
 ```
 
 ## 启动日志必须出现（缺一不可，出现"回退"字样=权重没就位）
