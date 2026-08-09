@@ -41,3 +41,7 @@ weights/ustc_pickers/*
 !weights/ustc_pickers/huanan_sd.pt
 !weights/ustc_pickers/jiangxi_sd.pt
 !weights/ustc_pickers/shandong_sd.pt
+
+# fork 验证的集成第4/5成员(域内增强+CREW 微调), 三分布消融为正
+!weights/aug/
+!weights/aug/*.pt

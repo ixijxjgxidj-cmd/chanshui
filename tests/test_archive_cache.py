@@ -67,6 +67,7 @@ def test_cached_equals_nocache_all_entries():
         for name, expect in payloads.items():
             src = f"{outer}!exam-data.zip!{name}"
             assert read_source_bytes(src) == expect, name
+        clear_archive_cache()  # Windows: 先关句柄再让 TemporaryDirectory 删文件
     clear_archive_cache()
 
 
@@ -79,6 +80,7 @@ def test_single_layer_zip():
         src = f"{outer}!exam/TASK01/T1.A.Q0001.mseed"
         assert read_source_bytes(src) == b"ONE-LAYER"
         assert read_source_bytes(src) == _read_source_bytes_nocache(src)
+        clear_archive_cache()  # Windows: 先关句柄再让 TemporaryDirectory 删文件
     clear_archive_cache()
 
 
@@ -119,6 +121,7 @@ def test_missing_entry_raises_keyerror():
             pass
         else:
             raise AssertionError("缺失条目应抛 KeyError")
+        clear_archive_cache()  # Windows: 先关句柄再让 TemporaryDirectory 删文件
     clear_archive_cache()
 
 

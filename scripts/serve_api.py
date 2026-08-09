@@ -265,11 +265,16 @@ def cls_to_official_json(
 # 推理引擎：模型常驻 + 合批 + 互斥
 # ---------------------------------------------------------------------------
 class Engine:
-    def __init__(self, picker, mag_estimator=None, cls_estimator=None):
+    def __init__(self, picker, mag_estimator=None, cls_estimator=None,
+                 cap_short_s: float = 0.0, cap_max_p: int = 1, cap_max_s: int = 1):
         self._picker = picker
         self._mag = mag_estimator  # None = 震级端点 501（--mag-model off 或构建失败降级）
         self._cls = cls_estimator  # None = 分类端点 501（--cls-model off 或构建失败降级）
         self._lock = threading.Lock()  # 单模型串行推理；解析/组装在锁外并发
+        # 短文件按置信度限额（postprocess/cap.py）。0 = 关闭，与历史行为逐位一致。
+        self._cap_short_s = float(cap_short_s or 0.0)
+        self._cap_max_p = int(cap_max_p)
+        self._cap_max_s = int(cap_max_s)
 
     @property
     def has_magnitude(self) -> bool:
@@ -335,6 +340,17 @@ class Engine:
         return cls_to_official_json(waveforms, cls_per_wf)
 
     def _pick_all(self, waveforms: List[Waveform]) -> List[List[Pick]]:
+        picks_per_wf = self._pick_all_raw(waveforms)
+        if self._cap_short_s > 0.0:
+            from phasepicker.postprocess.cap import cap_short_waveform_picks
+
+            picks_per_wf = cap_short_waveform_picks(
+                waveforms, picks_per_wf,
+                self._cap_short_s, self._cap_max_p, self._cap_max_s,
+            )
+        return picks_per_wf
+
+    def _pick_all_raw(self, waveforms: List[Waveform]) -> List[List[Pick]]:
         if hasattr(self._picker, "pick_batch"):
             try:
                 return self._picker.pick_batch(waveforms)
@@ -384,6 +400,12 @@ def build_engine(args) -> Engine:
         # None 即交给 PickerConfig 落到 defaults.py 全局默认
         p_merge_window_s=getattr(args, "p_merge_window", None),
         s_merge_window_s=getattr(args, "s_merge_window", None),
+        # 长记录 SNR 闸（fork 验证、三分布复验；--no-long-snr 关闭）
+        long_snr_threshold_db=(
+            None if getattr(args, "no_long_snr", False)
+            else float(getattr(args, "long_snr_db", -1.0))
+        ),
+        long_snr_min_duration_s=float(getattr(args, "long_snr_min_s", 300.0)),
     )
     # --weights 支持三种形态：空=纯预训练；单路径=单模型；逗号分隔=概率集成
     # （区域简名或 .pt 路径混用均可，如 "guangxi,jiangxi,shandong"）
@@ -474,7 +496,12 @@ def build_engine(args) -> Engine:
                     print("!! 分类器构建失败，/classify 将返回 501；/pick 不受影响")
             else:
                 print(f"!! 分类器 {ckind!r} 构建失败，/classify 将返回 501；/pick 不受影响")
-    return Engine(picker, mag_estimator=mag, cls_estimator=cls)
+    return Engine(
+        picker, mag_estimator=mag, cls_estimator=cls,
+        cap_short_s=float(getattr(args, "cap_short_s", 0.0) or 0.0),
+        cap_max_p=int(getattr(args, "cap_max_p", 1)),
+        cap_max_s=int(getattr(args, "cap_max_s", 1)),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -728,6 +755,25 @@ def make_arg_parser() -> argparse.ArgumentParser:
                     help="分类模型路径（默认 weights/official_r1_to_r2/ 下按 "
                          "--cls-model 选 t3_seismicxm_r1r2.joblib 或 "
                          "t3_event_baseline.joblib）")
+    # ---- 短文件限额 + 长记录 SNR 闸（fork 验证、本仓三分布复验，2026-08-09）----
+    # 服务端默认=生产配置（评测日忘带参数的风险 > 想关没关的风险）；
+    # 离线脚本 run_official_task1 默认关闭以保历史数字可复现，两侧语义一致。
+    ap.add_argument("--cap-short-s", type=float, default=300.0,
+                    help="短波形限额时长阈值（秒）：<=该值的波形最多留 --cap-max-p 个 P、"
+                         "--cap-max-s 个 S（按置信度择优）。0=关闭。默认 300=生产配置"
+                         "（三分布消融 r1+0.015/r2+0.026/08+0.026；短文件真值 2692/2692 全为 1P+1S）")
+    ap.add_argument("--cap-max-p", type=int, default=1,
+                    help="短波形最多保留几个 P（配合 --cap-short-s）")
+    ap.add_argument("--cap-max-s", type=int, default=1,
+                    help="短波形最多保留几个 S（配合 --cap-short-s）")
+    ap.add_argument("--long-snr-db", type=float, default=-1.0,
+                    help="长记录 SNR 闸阈值(dB)：时长>--long-snr-min-s 的波形丢弃 "
+                         "snr_db<该值的拾取（snr_db=拾取点后2s RMS/前2s RMS）。"
+                         "默认 -1.0=生产配置（r2+0.010/08+0.013/无长记录时零副作用）")
+    ap.add_argument("--no-long-snr", action="store_true",
+                    help="关闭长记录 SNR 闸")
+    ap.add_argument("--long-snr-min-s", type=float, default=300.0,
+                    help="多长的波形才算长记录（秒），配合 --long-snr-db")
     ap.add_argument("--capture-dir", default=None,
                     help="请求采集目录：把评测方 POST 的原始波形+我们的响应落盘"
                          "（响应发回后的后台任务写盘，评测方零延迟感知；磁盘余量"

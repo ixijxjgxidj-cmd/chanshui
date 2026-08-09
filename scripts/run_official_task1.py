@@ -54,7 +54,7 @@ def _read_sample_bytes(sample: ExamSample) -> bytes:
     return read_source_bytes(sample.source_path)
 
 
-def _make_load_waveforms_fn():
+def _make_load_waveforms_fn(duration_sink: dict | None = None):
     """构造 load_waveforms_fn；ObsPy 缺失时给清晰报错。
 
     返回一个吃 ExamSample、吐 List[Waveform] 的闭包。内部用 mseed_reader
@@ -73,6 +73,9 @@ def _make_load_waveforms_fn():
         result = load_waveforms(raw)
         for w in result.warnings:
             print(f"[warn] {sample.file_id} [{w.station}] {w.reason}: {w.detail}", file=sys.stderr)
+        if duration_sink is not None and result.waveforms:
+            # 供 --cap-short-s 判断长短文件；单键赋值在 GIL 下原子，多线程安全
+            duration_sink[sample.file_id] = max(w.duration for w in result.waveforms)
         return result.waveforms
 
     return _load
@@ -89,25 +92,45 @@ def _make_picker(
     batch_size: int = 256,
     overlap: float = 0.5,
     compile_model: bool = False,
+    long_snr_db: float | None = None,
+    long_snr_min_s: float = 300.0,
 ):
-    """按参数构建 SeisBenchPicker；torch/seisbench 缺失时给清晰报错。"""
+    """按参数构建 picker；torch/seisbench 缺失时给清晰报错。
+
+    --weights 三种形态（与 serve_api 同义，"评测用什么就上线什么"）：
+    空=纯预训练 / 单路径=单模型 / 逗号分隔=概率软集成。
+    """
     try:
         from phasepicker.inference.picker import PickerConfig, SeisBenchPicker
     except Exception as exc:  # pragma: no cover - 环境相关
         raise SystemExit(f"构建 picker 失败（import 阶段）：{exc!r}")
 
+    # 集成时 local_weights_path 必须留空：整串逗号会被当成单个文件名
+    is_ensemble = bool(weights) and "," in weights
     cfg = PickerConfig(
         device=None if device == "auto" else device,
         pretrained=pretrained,
         p_threshold=p_threshold,
         s_threshold=s_threshold,
-        local_weights_path=weights,
+        local_weights_path=None if is_ensemble else weights,
         use_fp16=use_fp16,
         num_threads=num_threads,
         batch_size=batch_size,
         overlap=overlap,
         compile_model=compile_model,
+        long_snr_threshold_db=long_snr_db,
+        long_snr_min_duration_s=long_snr_min_s,
     )
+    if is_ensemble:
+        from phasepicker.inference.picker import ProbEnsemblePicker
+
+        names = [x.strip() for x in weights.split(",") if x.strip()]
+        try:
+            picker = ProbEnsemblePicker.from_member_names(names, cfg)
+        except Exception as exc:  # pragma: no cover - 环境相关
+            raise SystemExit(f"构建概率集成失败：{exc!r}")
+        print(f"拾取器: 概率集成 × {len(names)} 成员 {names}")
+        return picker
     try:
         return SeisBenchPicker.from_config(cfg)
     except ImportError as exc:
@@ -165,6 +188,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
                     help="禁用流水线/合批优化，回退原始顺序实现（排查对比用）")
     ap.add_argument("--no-validate", action="store_true",
                     help="跳过写出后的提交文件回读自检")
+    # ---- 短文件限额 + 长记录 SNR 闸（fork 验证、本仓三分布复验，2026-08-09）----
+    ap.add_argument("--cap-short-s", type=float, default=0.0,
+                    help="短文件按置信度限额的时长阈值（秒）：<=该值的文件最多保留 "
+                         "--cap-max-p 个 P、--cap-max-s 个 S。0=关闭（与历史行为逐位一致）。"
+                         "生产配置 300（三分布消融 r1+0.015/r2+0.026/08+0.026）")
+    ap.add_argument("--cap-max-p", type=int, default=1,
+                    help="短文件最多保留几个 P（配合 --cap-short-s）")
+    ap.add_argument("--cap-max-s", type=int, default=1,
+                    help="短文件最多保留几个 S（配合 --cap-short-s）")
+    ap.add_argument("--long-snr-db", type=float, default=None,
+                    help="长记录 SNR 闸阈值(dB)：时长>--long-snr-min-s 的波形丢弃 "
+                         "snr_db<该值的拾取；snr_db=拾取点后2s RMS/前2s RMS。"
+                         "缺省=关闭。生产配置 -1.0（r2+0.010/08+0.013/r1 零触发零副作用）")
+    ap.add_argument("--long-snr-min-s", type=float, default=300.0,
+                    help="多长的波形才算长记录（秒），配合 --long-snr-db")
     return ap
 
 
@@ -191,7 +229,10 @@ def main(argv=None) -> int:
     )
 
     # 2) 构建依赖（缺 obspy/seisbench/torch 会在此给出清晰报错）
-    load_waveforms_fn = _make_load_waveforms_fn()
+    durations: dict = {}
+    load_waveforms_fn = _make_load_waveforms_fn(
+        duration_sink=durations if args.cap_short_s > 0 else None
+    )
     picker = _make_picker(
         args.weights,
         args.device,
@@ -203,6 +244,8 @@ def main(argv=None) -> int:
         batch_size=args.batch_size,
         overlap=args.overlap,
         compile_model=args.compile,
+        long_snr_db=args.long_snr_db,
+        long_snr_min_s=args.long_snr_min_s,
     )
 
     # 3) 端到端推理 → 相对秒 Task1Result
@@ -236,6 +279,16 @@ def main(argv=None) -> int:
         )
     elapsed = time.perf_counter() - t0
     print(f"推理完成：{len(samples)} 文件，{elapsed:.1f}s（{len(samples)/max(1e-9,elapsed):.2f} 文件/秒）")
+
+    # 3.5) 短文件限额（--cap-short-s > 0 时启用；见 postprocess/cap.py）
+    if args.cap_short_s > 0:
+        from phasepicker.postprocess.cap import cap_short_file_results
+
+        results_map, n_capped, n_dropped = cap_short_file_results(
+            results_map, durations, args.cap_short_s, args.cap_max_p, args.cap_max_s
+        )
+        print(f"短文件限额: 改动 {n_capped} 个文件，丢弃 {n_dropped} 个拾取"
+              f"（阈值 {args.cap_short_s:.0f}s，P<={args.cap_max_p} S<={args.cap_max_s}）")
 
     # 4) 写出（保持输入扫描顺序，便于复现）
     ordered = [results_map[s.file_id] for s in samples if s.file_id in results_map]

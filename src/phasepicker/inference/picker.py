@@ -86,6 +86,16 @@ class PickerConfig:
     #: 亚采样到时精细化：annotate 拿概率曲线后对峰做三点抛物线插值。
     #: 挑峰与 classify 逐位同源（pick 集合不变），只精化到时；False 走原 classify。
     subsample_refine: bool = True
+    #: 长记录 SNR 闸：波形时长 > long_snr_min_duration_s 时，丢弃
+    #: snr_db < long_snr_threshold_db 的拾取。None = 关闭。
+    #: 依据（fork 合成长记录 n=24 双侧定标 + 本仓三分布复验，2026-08-09）：
+    #: 阈值 -1.0 dB 时 r2 +0.010 / 08 +0.013 / r1 恰好零触发（无长记录，零副作用）。
+    #: snr_db = 拾取点后 long_snr_post_s 秒 RMS / 前 long_snr_pre_s 秒 RMS（dB）；
+    #: 真震相到达时幅度跃升，比值应为正；深负值 = 拾在噪声里。
+    long_snr_threshold_db: Optional[float] = None
+    long_snr_min_duration_s: float = 300.0
+    long_snr_pre_s: float = 2.0
+    long_snr_post_s: float = 2.0
 
 
 class BasePicker(ABC):
@@ -347,7 +357,47 @@ class SeisBenchPicker(BasePicker):
                 )
             )
 
-        return dedup_picks(picks, self._dedup_cfg)
+        return self._filter_long_snr(wf, dedup_picks(picks, self._dedup_cfg))
+
+    def _filter_long_snr(self, wf: Waveform, picks: List[Pick]) -> List[Pick]:
+        """长记录 SNR 过滤（见 PickerConfig.long_snr_threshold_db）。
+
+        只在时长超过 long_snr_min_duration_s 时生效；短文件由限额机制
+        （postprocess.cap）处理，两者互补不重叠。阈值 None 时原样返回（零开销）。
+        逻辑与 fork dizheng-opus-5 逐位一致（本仓三分布复验通过）。
+        """
+        thr = self._cfg.long_snr_threshold_db
+        if thr is None or not picks:
+            return picks
+        dur = wf.n_samples / wf.sampling_rate
+        if dur <= self._cfg.long_snr_min_duration_s:
+            return picks
+
+        data = np.asarray(wf.data, dtype=np.float64)
+        if data.ndim == 1:
+            data = data[None, :]
+        # 三分量合成幅度包络；单分量时退化为绝对值
+        mag = np.sqrt(np.sum(data ** 2, axis=0))
+        sr = float(wf.sampling_rate)
+        n = mag.shape[0]
+        n_pre = max(1, int(self._cfg.long_snr_pre_s * sr))
+        n_post = max(1, int(self._cfg.long_snr_post_s * sr))
+
+        kept: List[Pick] = []
+        for p in picks:
+            i = int(round((p.time_utc - wf.starttime_utc) * sr))
+            a, b = max(0, i - n_pre), i
+            c, d = i, min(n, i + n_post)
+            # 窗口不足（贴边）时不判——宁可放过，也不误伤
+            if b - a < n_pre // 2 or d - c < n_post // 2:
+                kept.append(p)
+                continue
+            rms_pre = float(np.sqrt(np.mean(mag[a:b] ** 2)) + 1e-12)
+            rms_post = float(np.sqrt(np.mean(mag[c:d] ** 2)) + 1e-12)
+            snr_db = 20.0 * float(np.log10(rms_post / rms_pre))
+            if snr_db >= thr:
+                kept.append(p)
+        return kept
 
     def pick_batch(self, wfs: "List[Waveform]") -> List[List[Pick]]:
         """批量拾取：多条波形合成一个 Stream，单次 classify 完成全部推理。
@@ -411,7 +461,10 @@ class SeisBenchPicker(BasePicker):
                     station=wfs[idx].station,
                 )
             )
-        return [dedup_picks(group, self._dedup_cfg) for group in per_wf]
+        return [
+            self._filter_long_snr(wf, dedup_picks(group, self._dedup_cfg))
+            for wf, group in zip(wfs, per_wf)
+        ]
 
     def _to_stream(self, wf: Waveform, station_override: Optional[str] = None):
         from obspy import Stream, Trace, UTCDateTime

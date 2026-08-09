@@ -11,7 +11,11 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from phasepicker.io.official_exam import scan_exam_input
-from phasepicker.io.official_waveforms import read_package_answers, read_source_bytes
+from phasepicker.io.official_waveforms import (
+    clear_archive_cache,
+    read_package_answers,
+    read_source_bytes,
+)
 from phasepicker.tasks.baseline_models import (
     load_bundle,
     save_bundle,
@@ -89,6 +93,7 @@ def test_nested_scan_bytes_and_answers():
         assert read_source_bytes(by_task[ExamTask.T2].source_path) == b"fake-t2"
         t2 = read_package_answers(path, ExamTask.T2)
         t3 = read_package_answers(path, ExamTask.T3)
+        clear_archive_cache()  # Windows: 先关句柄再让 TemporaryDirectory 删文件
     assert abs(t2["T2.Q0001.mseed"].magnitude - 5.2) < 1e-9
     assert t3["T3.A.Q0001.mseed"].label == 2
 
