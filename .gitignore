@@ -39,3 +39,5 @@ weights/seismicxm/
 weights/ustc_pickers/*
 !weights/ustc_pickers/guangxi_sd.pt
 !weights/ustc_pickers/huanan_sd.pt
+!weights/ustc_pickers/jiangxi_sd.pt
+!weights/ustc_pickers/shandong_sd.pt

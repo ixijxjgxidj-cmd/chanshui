@@ -7,7 +7,7 @@
 
 | 组件 | 变化 | 验收成绩（去年第2轮盲测） |
 |---|---|---|
-| T1 拾取 | diting → **USTC 广西权重** + 亚采样精细化 | 均分 1.669→**1.716** |
+| T1 拾取 | diting → **广西+江西+山东 概率集成** + 亚采样精细化 | 均分 1.669→**1.723**（r1 同验 1.732→1.744） |
 | T2 震级 | joblib 特征树 → **SeismicXM deep1024+Ridge** | MAE 0.817→**0.621** |
 | T3 分类 | joblib 特征树 → **SeismicXM TTA+余弦kNN(k=5)** | 81.5%→**98.9%** |
 
@@ -23,16 +23,17 @@
 ```bash
 pip install einops           # SeismicXM 唯一新依赖
 git pull
-# 权重就位检查（三个都必须存在，缺 seismicxm 会自动回退旧 baseline 不报错——要看启动日志！）
-ls -la weights/seismicxm/seismicxm.middle.pt weights/ustc_pickers/guangxi_sd.pt \
+# 权重就位检查（缺 seismicxm 会自动回退旧 baseline 不报错——要看启动日志！）
+ls -la weights/seismicxm/seismicxm.middle.pt weights/ustc_pickers/*_sd.pt \
       weights/official_r1_to_r2/t2_seismicxm_r1r2.joblib
-# 启动（相比旧命令只多 --weights；mag/cls 默认已是 seismicxm）
-python scripts/serve_api.py --port 8000 --weights weights/ustc_pickers/guangxi_sd.pt
+# 启动（T1 = 三区域概率集成，2026-08-02 定稿：两轮均超最优单模型）
+python scripts/serve_api.py --port 8000 --weights "guangxi,jiangxi,shandong"
 ```
 
 ## 启动日志必须出现（缺一不可，出现"回退"字样=权重没就位）
 
 ```
+拾取器: 概率集成 × 3 成员 ['guangxi', 'jiangxi', 'shandong']
 震级估计器: seismicxm 已就绪
 分类器: seismicxm 已就绪
 ```

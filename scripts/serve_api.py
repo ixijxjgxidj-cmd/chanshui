@@ -365,7 +365,7 @@ def build_engine(args) -> Engine:
         pretrained=args.pretrained,
         p_threshold=args.p_threshold,
         s_threshold=args.s_threshold,
-        local_weights_path=args.weights,
+        local_weights_path=None,
         use_fp16=args.fp16,
         num_threads=args.threads,
         batch_size=args.batch_size,
@@ -376,7 +376,19 @@ def build_engine(args) -> Engine:
         p_merge_window_s=getattr(args, "p_merge_window", None),
         s_merge_window_s=getattr(args, "s_merge_window", None),
     )
-    picker = SeisBenchPicker.from_config(cfg)
+    # --weights 支持三种形态：空=纯预训练；单路径=单模型；逗号分隔=概率集成
+    # （区域简名或 .pt 路径混用均可，如 "guangxi,jiangxi,shandong"）
+    if args.weights and "," in args.weights:
+        from phasepicker.inference.picker import ProbEnsemblePicker
+
+        names = [x.strip() for x in args.weights.split(",") if x.strip()]
+        picker = ProbEnsemblePicker.from_member_names(names, cfg)
+        print(f"拾取器: 概率集成 × {len(names)} 成员 {names}")
+    else:
+        import dataclasses
+
+        cfg = dataclasses.replace(cfg, local_weights_path=args.weights)
+        picker = SeisBenchPicker.from_config(cfg)
 
     # 震级估计器：构建失败绝不拖垮 /pick 主业务——降级为 None（端点 501）并留痕
     mag = None

@@ -457,3 +457,84 @@ class SeisBenchPicker(BasePicker):
         if s == "S":
             return PhaseType.S
         return None
+
+
+class ProbEnsemblePicker(SeisBenchPicker):
+    """多 PhaseNet 概率曲线逐点平均后统一挑峰的软集成拾取器.
+
+    动机（2026-08-02，区域鲁棒性）：今年考题区域未知，单一区域权重存在错配
+    风险（41 权重两轮实测最差-最好差 0.05~0.09 均分）。概率级平均能对冲单
+    成员的系统性偏差——与此前证伪的"拾取级投票"不同（离散、稀释最强者），
+    软集成在两轮上均**超过各自最优单模型**：
+    r1 1.744（最优单 1.738）/ r2 1.723（最优单 1.717），成员=guangxi+jiangxi+shandong。
+
+    行为契约：除 _classify_refined 外与单模型 picker 完全一致（同阈值、同去重、
+    同亚采样精细化）；推理成本 = 成员数 × 单模型。成员输出 trace 必须逐条对齐
+    （同 id/起点/长度），对不齐直接抛错——静默错位会产出坏拾取。
+    """
+
+    DEFAULT_MEMBERS = ("guangxi", "jiangxi", "shandong")
+
+    @classmethod
+    def from_member_names(
+        cls,
+        names: List[str],
+        base_cfg: PickerConfig,
+        weights_dir: str = "weights/ustc_pickers",
+    ) -> "ProbEnsemblePicker":
+        """按区域简名（或 .pt 路径，或 'diting'=纯预训练）构建集成。"""
+        import dataclasses
+        import os
+
+        def cfg_for(name: str) -> PickerConfig:
+            if name == "diting":
+                path = None
+            elif os.path.sep in name or name.endswith(".pt"):
+                path = name
+            else:
+                path = os.path.join(weights_dir, f"{name}_sd.pt")
+            # 集成必须走 annotate 路径（classify 拿不到概率曲线无从平均）
+            return dataclasses.replace(
+                base_cfg, local_weights_path=path, subsample_refine=True
+            )
+
+        host = cls.from_config(cfg_for(names[0]))
+        members = [host._model]
+        for n in names[1:]:
+            members.append(SeisBenchPicker.from_config(cfg_for(n))._model)
+        host._members = members
+        return host
+
+    def _classify_refined(self, stream):
+        import seisbench.util as sbu
+
+        anns = [
+            m.annotate(stream, batch_size=self._cfg.batch_size, overlap=self._cfg.overlap)
+            for m in self._members
+        ]
+        base = anns[0]
+        for tr in base:
+            stack = [tr.data.astype(np.float64)]
+            for other in anns[1:]:
+                match = [
+                    t for t in other
+                    if t.id == tr.id
+                    and t.stats.starttime == tr.stats.starttime
+                    and len(t.data) == len(tr.data)
+                ]
+                if len(match) != 1:
+                    raise RuntimeError(
+                        f"集成 trace 对不齐: {tr.id}@{tr.stats.starttime} 命中 {len(match)} 条"
+                    )
+                stack.append(match[0].data.astype(np.float64))
+            tr.data = np.mean(stack, axis=0)
+
+        picks = sbu.PickList()
+        prefix = self._model.__class__.__name__
+        for phase, th in (("P", self._cfg.p_threshold), ("S", self._cfg.s_threshold)):
+            phase_ann = base.select(channel=f"{prefix}_{phase}")
+            phase_picks = self._model.picks_from_annotations(phase_ann, th, phase)
+            for p in phase_picks:
+                self._refine_peak_inplace(p, phase_ann)
+            picks += phase_picks
+        return sbu.PickList(sorted(picks))
