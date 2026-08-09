@@ -96,6 +96,32 @@ class PickerConfig:
     long_snr_min_duration_s: float = 300.0
     long_snr_pre_s: float = 2.0
     long_snr_post_s: float = 2.0
+    #: 短文件强制成对兜底：时长 <= force_pair_max_duration_s 的波形，若某相位在
+    #: 正常阈值上零触发，则用 force_pair_floor 低阈值再挑一次、只取最高峰补发。
+    #: None = 关闭（与历史行为逐位一致）。
+    #: 依据（2026-08-10 残差归因 + 文献）：
+    #: - 评分规则下空输出 = 0 时分 + 数量罚（floor0 读法整文件 0 分），而错拾
+    #:   一对只丢时分不罚数量 → 兜底期望恒非负；
+    #: - 三分布真值统计 r1 1000 / r2 915 / 08 784 全部文件 >=1P+1S，无 0 相位
+    #:   文件（唯一亏钱场景在去年数据不存在）；仍留概率地板对冲今年纯噪声文件；
+    #: - arXiv:2511.06731：S 峰常被压在阈值下但位置信息仍在（幅度抑制=优化陷阱），
+    #:   低阈值 argmax 兜底大概率落在时分容差窗内。
+    force_pair_max_duration_s: Optional[float] = None
+    force_pair_floor: float = 0.03
+    #: 长记录事件级去重：时长 > long_dedup_min_duration_s 的波形，在标准去重
+    #: （合并窗 P 1s / S 3s）之后再按更宽的窗做一次簇合并（每簇留置信度最高者）。
+    #: 动机（2026-08-10 残差归因）：长连续记录上滑窗推理把同一事件的余相/包络
+    #: 反复触发，r2 两个 3600s 文件多拾 ~155 个（罚 63 分）、08 五个 4000s 文件
+    #: 罚 119.5 分；短文件由 cap 限额处理，长文件此前无任何计数控制。
+    #: 窗口取值原则：小于最小可信事件间隔（去年长文件事件间隔中位 ~114s），
+    #: 大于重复触发的散布（数秒~数十秒）；None = 关闭。
+    long_dedup_p_window_s: Optional[float] = None
+    long_dedup_s_window_s: Optional[float] = None
+    long_dedup_min_duration_s: float = 300.0
+    #: 推理端 TTA：波形极性翻转（乘 -1）后再 annotate 一遍，概率曲线并入平均。
+    #: 物理安全（P 初动极性本就双向），成本 = 推理时间 ×2。仅集成路径生效。
+    #: 文献：LANL 滑窗预测不一致性缓解（多视角平均）；三分布同向不劣才准上生产。
+    tta_polarity_flip: bool = False
 
 
 class BasePicker(ABC):
@@ -270,8 +296,50 @@ class SeisBenchPicker(BasePicker):
             phase_picks = self._model.picks_from_annotations(phase_ann, th, phase)
             for p in phase_picks:
                 self._refine_peak_inplace(p, phase_ann)
+            phase_picks += self._fallback_lowth_picks(phase, phase_ann, stream, phase_picks)
             picks += phase_picks
         return sbu.PickList(sorted(picks))
+
+    def _fallback_lowth_picks(self, phase: str, phase_ann, stream, existing) -> list:
+        """短文件强制成对兜底（见 PickerConfig.force_pair_max_duration_s）。
+
+        按台站粒度工作：合批推理时一个 stream 混编多个波形（临时台站码
+        B00000...），必须逐台站判断"该相位是否零触发"，整 stream 粒度在
+        合批路径下几乎永不触发（2026-08-10 首版 A/B 三分布逐位无变化的教训）。
+        对零触发且时长 <= 上限的台站，用 force_pair_floor 低阈值重挑并只留
+        最高峰；曲线最大值仍低于地板时放弃（对冲真值无该相位的纯噪声文件）。
+        返回的 picks 已做亚采样精化。
+        """
+        max_dur = self._cfg.force_pair_max_duration_s
+        if max_dur is None or len(phase_ann) == 0 or len(stream) == 0:
+            return []
+        dur_by_sta: dict = {}
+        for tr in stream:
+            sta = tr.stats.station
+            d = float(tr.stats.endtime - tr.stats.starttime)
+            dur_by_sta[sta] = max(d, dur_by_sta.get(sta, 0.0))
+        have = set()
+        for p in existing:
+            tid = str(getattr(p, "trace_id", "") or "")
+            parts = tid.split(".")
+            if len(parts) >= 2:
+                have.add(parts[1])
+        out = []
+        for sta, dur in dur_by_sta.items():
+            if sta in have or dur > max_dur:
+                continue
+            sel = phase_ann.select(station=sta)
+            if len(sel) == 0:
+                continue
+            low = self._model.picks_from_annotations(
+                sel, self._cfg.force_pair_floor, phase
+            )
+            if not low:
+                continue
+            best = max(low, key=lambda p: float(getattr(p, "peak_value", 0.0) or 0.0))
+            self._refine_peak_inplace(best, sel)
+            out.append(best)
+        return out
 
     @staticmethod
     def _refine_peak_inplace(pick, phase_ann) -> None:
@@ -357,7 +425,30 @@ class SeisBenchPicker(BasePicker):
                 )
             )
 
-        return self._filter_long_snr(wf, dedup_picks(picks, self._dedup_cfg))
+        return self._long_dedup(wf, self._filter_long_snr(wf, dedup_picks(picks, self._dedup_cfg)))
+
+    def _long_dedup(self, wf: Waveform, picks: List[Pick]) -> List[Pick]:
+        """长记录事件级去重（见 PickerConfig.long_dedup_p_window_s）。
+
+        放在 SNR 闸之后：先滤掉拾在噪声里的，再对幸存者做宽窗簇合并，
+        避免噪声 pick 抢走簇代表名额。短文件（<= long_dedup_min_duration_s）
+        原样返回，与 cap 限额互补不重叠。
+        """
+        pw = self._cfg.long_dedup_p_window_s
+        sw = self._cfg.long_dedup_s_window_s
+        if (pw is None and sw is None) or not picks:
+            return picks
+        dur = wf.n_samples / wf.sampling_rate
+        if dur <= self._cfg.long_dedup_min_duration_s:
+            return picks
+        windows = {}
+        if pw is not None:
+            windows[PhaseType.P] = pw
+        if sw is not None:
+            windows[PhaseType.S] = sw
+        from ..postprocess.dedup import deduplicate
+
+        return deduplicate(picks, merge_window_s=windows)
 
     def _filter_long_snr(self, wf: Waveform, picks: List[Pick]) -> List[Pick]:
         """长记录 SNR 过滤（见 PickerConfig.long_snr_threshold_db）。
@@ -462,7 +553,7 @@ class SeisBenchPicker(BasePicker):
                 )
             )
         return [
-            self._filter_long_snr(wf, dedup_picks(group, self._dedup_cfg))
+            self._long_dedup(wf, self._filter_long_snr(wf, dedup_picks(group, self._dedup_cfg)))
             for wf, group in zip(wfs, per_wf)
         ]
 
@@ -561,9 +652,16 @@ class ProbEnsemblePicker(SeisBenchPicker):
     def _classify_refined(self, stream):
         import seisbench.util as sbu
 
+        streams = [stream]
+        if self._cfg.tta_polarity_flip:
+            flipped = stream.copy()
+            for tr in flipped:
+                tr.data = -tr.data
+            streams.append(flipped)
         anns = [
-            m.annotate(stream, batch_size=self._cfg.batch_size, overlap=self._cfg.overlap)
+            m.annotate(s, batch_size=self._cfg.batch_size, overlap=self._cfg.overlap)
             for m in self._members
+            for s in streams
         ]
         base = anns[0]
         for tr in base:
@@ -589,5 +687,6 @@ class ProbEnsemblePicker(SeisBenchPicker):
             phase_picks = self._model.picks_from_annotations(phase_ann, th, phase)
             for p in phase_picks:
                 self._refine_peak_inplace(p, phase_ann)
+            phase_picks += self._fallback_lowth_picks(phase, phase_ann, stream, phase_picks)
             picks += phase_picks
         return sbu.PickList(sorted(picks))

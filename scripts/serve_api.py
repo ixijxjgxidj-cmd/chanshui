@@ -406,6 +406,25 @@ def build_engine(args) -> Engine:
             else float(getattr(args, "long_snr_db", -1.0))
         ),
         long_snr_min_duration_s=float(getattr(args, "long_snr_min_s", 300.0)),
+        # 短文件强制成对兜底（2026-08-10 定稿；--no-force-pair 关闭）
+        force_pair_max_duration_s=(
+            None if getattr(args, "no_force_pair", False)
+            else float(getattr(args, "force_pair_short_s", 300.0))
+        ),
+        force_pair_floor=float(getattr(args, "force_pair_floor", 0.03)),
+        # 长记录事件级去重（2026-08-10 窗口扫描：30s 最优但贴悬崖(45s 起合并
+        # 真实事件暴跌)，取 20s 保守值 +26.7/7 文件；0 或 --no-long-dedup 关闭）
+        long_dedup_p_window_s=(
+            None if (getattr(args, "no_long_dedup", False)
+                     or float(getattr(args, "long_dedup_s", 20.0)) <= 0)
+            else float(getattr(args, "long_dedup_s", 20.0))
+        ),
+        long_dedup_s_window_s=(
+            None if (getattr(args, "no_long_dedup", False)
+                     or float(getattr(args, "long_dedup_s", 20.0)) <= 0)
+            else float(getattr(args, "long_dedup_s", 20.0))
+        ),
+        tta_polarity_flip=bool(getattr(args, "tta_flip", False)),
     )
     # --weights 支持三种形态：空=纯预训练；单路径=单模型；逗号分隔=概率集成
     # （区域简名或 .pt 路径混用均可，如 "guangxi,jiangxi,shandong"）
@@ -774,6 +793,24 @@ def make_arg_parser() -> argparse.ArgumentParser:
                     help="关闭长记录 SNR 闸")
     ap.add_argument("--long-snr-min-s", type=float, default=300.0,
                     help="多长的波形才算长记录（秒），配合 --long-snr-db")
+    ap.add_argument("--force-pair-short-s", type=float, default=300.0,
+                    help="短文件强制成对兜底时长阈值（秒）：<=该值的波形某相位阈值上"
+                         "零触发时，用 --force-pair-floor 低阈值补发最高峰。默认 300="
+                         "生产配置（三分布真值全为>=1P+1S，空输出必吃数量罚；"
+                         "arXiv:2511.06731 阈值下峰位置信息仍在）")
+    ap.add_argument("--no-force-pair", action="store_true",
+                    help="关闭短文件强制成对兜底")
+    ap.add_argument("--force-pair-floor", type=float, default=0.03,
+                    help="兜底概率地板：曲线最大值低于该值仍放弃补发")
+    ap.add_argument("--long-dedup-s", type=float, default=20.0,
+                    help="长记录事件级去重合并窗（秒）：>300s 波形在标准去重后按此"
+                         "宽窗再簇合并（每簇留置信度最高者）。默认 20=生产配置"
+                         "（窗口扫描 30s 最优但贴悬崖，20s 保守 +26.7 分/7 长文件）")
+    ap.add_argument("--no-long-dedup", action="store_true",
+                    help="关闭长记录事件级去重")
+    ap.add_argument("--tta-flip", action="store_true",
+                    help="推理端 TTA：极性翻转副本并入概率平均（集成路径，耗时×2；"
+                         "默认关，三分布验证通过后才开）")
     ap.add_argument("--capture-dir", default=None,
                     help="请求采集目录：把评测方 POST 的原始波形+我们的响应落盘"
                          "（响应发回后的后台任务写盘，评测方零延迟感知；磁盘余量"

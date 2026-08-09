@@ -94,6 +94,10 @@ def _make_picker(
     compile_model: bool = False,
     long_snr_db: float | None = None,
     long_snr_min_s: float = 300.0,
+    force_pair_short_s: float = 0.0,
+    force_pair_floor: float = 0.03,
+    long_dedup_s: float = 0.0,
+    tta_flip: bool = False,
 ):
     """按参数构建 picker；torch/seisbench 缺失时给清晰报错。
 
@@ -120,6 +124,11 @@ def _make_picker(
         compile_model=compile_model,
         long_snr_threshold_db=long_snr_db,
         long_snr_min_duration_s=long_snr_min_s,
+        force_pair_max_duration_s=(force_pair_short_s if force_pair_short_s > 0 else None),
+        force_pair_floor=force_pair_floor,
+        long_dedup_p_window_s=(long_dedup_s if long_dedup_s > 0 else None),
+        long_dedup_s_window_s=(long_dedup_s if long_dedup_s > 0 else None),
+        tta_polarity_flip=tta_flip,
     )
     if is_ensemble:
         from phasepicker.inference.picker import ProbEnsemblePicker
@@ -203,6 +212,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
                          "缺省=关闭。生产配置 -1.0（r2+0.010/08+0.013/r1 零触发零副作用）")
     ap.add_argument("--long-snr-min-s", type=float, default=300.0,
                     help="多长的波形才算长记录（秒），配合 --long-snr-db")
+    ap.add_argument("--force-pair-short-s", type=float, default=0.0,
+                    help="短文件强制成对兜底的时长阈值（秒）：<=该值的波形若某相位"
+                         "阈值上零触发，用 --force-pair-floor 低阈值补发最高峰。"
+                         "0=关闭（与历史行为逐位一致）。依据：三分布真值全为>=1P+1S，"
+                         "空输出必吃数量罚；arXiv:2511.06731 阈值下峰位置信息仍在")
+    ap.add_argument("--force-pair-floor", type=float, default=0.03,
+                    help="兜底的概率地板：曲线最大值低于该值仍放弃补发"
+                         "（对冲真值无该相位的纯噪声文件）")
+    ap.add_argument("--long-dedup-s", type=float, default=0.0,
+                    help="长记录事件级去重合并窗（秒）：>300s 波形在标准去重后按此"
+                         "宽窗再簇合并一次（每簇留置信度最高者）。0=关闭")
+    ap.add_argument("--tta-flip", action="store_true",
+                    help="推理端 TTA：极性翻转副本并入概率平均（仅集成路径，耗时×2）")
     return ap
 
 
@@ -246,6 +268,10 @@ def main(argv=None) -> int:
         compile_model=args.compile,
         long_snr_db=args.long_snr_db,
         long_snr_min_s=args.long_snr_min_s,
+        force_pair_short_s=args.force_pair_short_s,
+        force_pair_floor=args.force_pair_floor,
+        long_dedup_s=args.long_dedup_s,
+        tta_flip=args.tta_flip,
     )
 
     # 3) 端到端推理 → 相对秒 Task1Result
