@@ -225,30 +225,39 @@ def _station_keys(waveforms: List[Waveform]) -> List[str]:
 def mags_to_official_json(
     waveforms: List[Waveform],
     mags_per_wf: List[List[float]],
-) -> Dict[str, Dict[str, List[float]]]:
-    """震级响应组装：台站名 → {"M": [震级...]}。
+) -> Dict[str, float]:
+    """震级响应组装：台站名 → 浮点震级（扁平）。
 
-    官方尚未公布震级 API 的输出格式——采用与震相同构的最保守形状
-    （台站键 + 单键数组），一位小数（去年 T2 答案精度）。格式一旦公布只改这里。
+    格式依据《数据读取和API生成格式要求示例.docx》（2026-08 决赛资料）：
+    {"STA1": 1.56, "STA2": 3.28}。同台站多值取均值；保留两位小数（示例精度）。
     """
-    out: Dict[str, Dict[str, List[float]]] = {}
+    acc: Dict[str, List[float]] = {}
     for key, mags in zip(_station_keys(waveforms), mags_per_wf):
-        slot = out.setdefault(key, {"M": []})
-        slot["M"].extend(round(float(m), 1) for m in mags)
-    return out
+        acc.setdefault(key, []).extend(float(m) for m in mags)
+    return {k: round(sum(v) / len(v), 2) for k, v in acc.items() if v}
 
 
 def cls_to_official_json(
     waveforms: List[Waveform],
     cls_per_wf: List[List[int]],
-) -> Dict[str, Dict[str, List[int]]]:
-    """分类响应组装：台站名 → {"class": [类别整数...]}（1..5，沿用去年 T3 语义）。
+) -> Dict[str, int]:
+    """分类响应组装：台站名 → 类别整数（扁平）。
 
-    输出格式官方未公布，与震相/震级同构的保守形状；公布后只改这里。"""
-    out: Dict[str, Dict[str, List[int]]] = {}
+    格式依据《数据读取和API生成格式要求示例.docx》：{"STA1": 1, "STA2": 2}，
+    1=地震 2=爆破 3=塌陷 4=滑坡 5=其它（与去年 T3 语义一致）。
+    同台站多值取众数（并列取先出现者）。
+    """
+    acc: Dict[str, List[int]] = {}
     for key, cls in zip(_station_keys(waveforms), cls_per_wf):
-        slot = out.setdefault(key, {"class": []})
-        slot["class"].extend(int(v) for v in cls)
+        acc.setdefault(key, []).extend(int(v) for v in cls)
+    out: Dict[str, int] = {}
+    for k, v in acc.items():
+        if not v:
+            continue
+        counts: Dict[int, int] = {}
+        for x in v:
+            counts[x] = counts.get(x, 0) + 1
+        out[k] = max(counts, key=lambda c: (counts[c], -v.index(c)))
     return out
 
 
@@ -600,16 +609,19 @@ def create_app(engine: Engine, extra_route: Optional[str] = None, capture_dir: O
         if early is not None:
             return early
 
-        merged: Dict[str, Dict[str, List[float]]] = {}
+        acc: Dict[str, List[float]] = {}
         for _name, raw in payloads:
             try:
                 one = await run_in_threadpool(engine.process_mseed_bytes_magnitude, raw)
             except Exception:  # noqa: BLE001 —— 与 /pick 同契约：降级空表不 5xx
                 traceback.print_exc()
                 one = {}
-            for sta, slot in one.items():
-                tgt = merged.setdefault(sta, {"M": []})
-                tgt["M"] = tgt["M"] + slot["M"]
+            for sta, val in one.items():
+                acc.setdefault(sta, []).append(float(val))
+        # 官方扁平格式：台站 → 单个浮点；跨文件同台站取均值
+        merged: Dict[str, float] = {
+            sta: round(sum(v) / len(v), 2) for sta, v in acc.items() if v
+        }
 
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         return JSONResponse(
@@ -629,16 +641,22 @@ def create_app(engine: Engine, extra_route: Optional[str] = None, capture_dir: O
         if early is not None:
             return early
 
-        merged: Dict[str, Dict[str, List[int]]] = {}
+        acc: Dict[str, List[int]] = {}
         for _name, raw in payloads:
             try:
                 one = await run_in_threadpool(engine.process_mseed_bytes_classify, raw)
             except Exception:  # noqa: BLE001 —— 与 /pick 同契约：降级空表不 5xx
                 traceback.print_exc()
                 one = {}
-            for sta, slot in one.items():
-                tgt = merged.setdefault(sta, {"class": []})
-                tgt["class"] = tgt["class"] + slot["class"]
+            for sta, val in one.items():
+                acc.setdefault(sta, []).append(int(val))
+        # 官方扁平格式：台站 → 单个整数类别；跨文件同台站取众数（并列取先出现）
+        merged: Dict[str, int] = {}
+        for sta, v in acc.items():
+            counts: Dict[int, int] = {}
+            for x in v:
+                counts[x] = counts.get(x, 0) + 1
+            merged[sta] = max(counts, key=lambda c: (counts[c], -v.index(c)))
 
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         return JSONResponse(

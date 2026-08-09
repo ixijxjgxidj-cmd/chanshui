@@ -26,7 +26,7 @@ class StubEngine:
         return {"STA1": {"P": ["1970-01-01T00:00:01.000000Z"], "S": []}}
 
     def process_mseed_bytes_magnitude(self, raw):
-        return {"STA1": {"M": [4.2]}}
+        return {"STA1": 4.2}  # 官方扁平格式
 
 
 def test_capture_writes_waveform_and_manifest(tmp_path):

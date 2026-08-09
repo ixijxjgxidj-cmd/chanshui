@@ -1,6 +1,6 @@
 """/classify 分类端点的单元测试（桩分类器）+ 真模型冒烟.
 
-覆盖：输出形状 {台站: {"class": [int]}}、off/降级 501、与 /pick 同载荷契约、
+覆盖：输出形状 {台站: int}（官方扁平格式）、off/降级 501、与 /pick 同载荷契约、
 /class 别名、CLI 默认值、真 T3 模型加载与整数类别输出。
 """
 
@@ -41,10 +41,10 @@ def _client(engine):
 
 
 def test_classify_shape_and_alias():
-    eng = StubClsEngine(result={"STA1": {"class": [2]}})
+    eng = StubClsEngine(result={"STA1": 2})
     c = _client(eng)
     r = c.post("/classify", files={"file": ("a.mseed", b"xx")})
-    assert (r.status_code, r.json()) == (200, {"STA1": {"class": [2]}})
+    assert (r.status_code, r.json()) == (200, {"STA1": 2})
     assert c.post("/class", files={"file": ("a.mseed", b"xx")}).json() == r.json()
 
 
