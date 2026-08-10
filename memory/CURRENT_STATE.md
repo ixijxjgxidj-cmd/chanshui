@@ -10,7 +10,7 @@
 
 - Git 主分支：`main`。
 - 当前运行代码提交：`53117b9d5912578c93d90e0a53774d66d0286aef`。
-- 本地与 `origin/main` 已包含第 3 轮论文/预注册提交 `10f9773` 和技术澄清 `acad92d`；第 3 轮结果代码与否证结论正在本轮结果提交中。服务器仓库仍为已验收记录提交 `c08bda58bad856fa1bd24f8975385696dbad11bc`。第 2/3 轮都没有生产变更，因此不为同步实验脚本而重启或替换服务。
+- 本地与 `origin/main` 已包含第 3 轮论文/预注册提交 `10f9773`、技术澄清 `acad92d` 和结果否证提交 `57e28f1`。服务器仓库仍为已验收记录提交 `c08bda58bad856fa1bd24f8975385696dbad11bc`。第 2/3 轮都没有生产变更，因此不为同步实验脚本而重启或替换服务。
 - 唯一远端：`https://github.com/ixijxjgxidj-cmd/dizheng-gpt5.6-sol.git`。
 - 上次核验时服务器工作区干净；新的专用 SSH 密钥已通过 `BatchMode` 直连验证，备用代理未使用。凭据本身不进入仓库或 memory。
 - `phasepick-api` 是系统级 systemd unit，`active` 且 `enabled`，但进程以普通用户运行。
