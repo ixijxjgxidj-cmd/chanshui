@@ -412,6 +412,7 @@ def build_engine(args) -> Engine:
             else float(getattr(args, "force_pair_short_s", 300.0))
         ),
         force_pair_floor=float(getattr(args, "force_pair_floor", 0.03)),
+        force_pair_conditional=(getattr(args, "force_pair_mode", "conditional") == "conditional"),
         # 长记录事件级去重（2026-08-10 窗口扫描：30s 最优但贴悬崖(45s 起合并
         # 真实事件暴跌)，取 20s 保守值 +26.7/7 文件；0 或 --no-long-dedup 关闭）
         long_dedup_p_window_s=(
@@ -802,6 +803,11 @@ def make_arg_parser() -> argparse.ArgumentParser:
                     help="关闭短文件强制成对兜底")
     ap.add_argument("--force-pair-floor", type=float, default=0.03,
                     help="兜底概率地板：曲线最大值低于该值仍放弃补发")
+    ap.add_argument("--force-pair-mode", choices=["conditional", "always"],
+                    default="conditional",
+                    help="conditional(默认)=另一相位阈值上有触发才补——今年官方"
+                         "确认'含纯噪声条目'，条件式对噪声完全免疫且保留 85% 收益；"
+                         "always=零触发就补（去年数据 +6.5 分但每个噪声条目 -1.0）")
     ap.add_argument("--long-dedup-s", type=float, default=20.0,
                     help="长记录事件级去重合并窗（秒）：>300s 波形在标准去重后按此"
                          "宽窗再簇合并（每簇留置信度最高者）。默认 20=生产配置"

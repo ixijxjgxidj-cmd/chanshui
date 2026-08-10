@@ -96,6 +96,7 @@ def _make_picker(
     long_snr_min_s: float = 300.0,
     force_pair_short_s: float = 0.0,
     force_pair_floor: float = 0.03,
+    force_pair_mode: str = "conditional",
     long_dedup_s: float = 0.0,
     tta_flip: bool = False,
 ):
@@ -126,6 +127,7 @@ def _make_picker(
         long_snr_min_duration_s=long_snr_min_s,
         force_pair_max_duration_s=(force_pair_short_s if force_pair_short_s > 0 else None),
         force_pair_floor=force_pair_floor,
+        force_pair_conditional=(force_pair_mode == "conditional"),
         long_dedup_p_window_s=(long_dedup_s if long_dedup_s > 0 else None),
         long_dedup_s_window_s=(long_dedup_s if long_dedup_s > 0 else None),
         tta_polarity_flip=tta_flip,
@@ -220,6 +222,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--force-pair-floor", type=float, default=0.03,
                     help="兜底的概率地板：曲线最大值低于该值仍放弃补发"
                          "（对冲真值无该相位的纯噪声文件）")
+    ap.add_argument("--force-pair-mode", choices=["conditional", "always"],
+                    default="conditional",
+                    help="conditional=另一相位阈值上有触发才补（纯噪声条目免疫，"
+                         "保留 36.7/43.2 分收益）；always=零触发就补（去年数据"
+                         "+6.5 分但噪声条目每个 -1.0）")
     ap.add_argument("--long-dedup-s", type=float, default=0.0,
                     help="长记录事件级去重合并窗（秒）：>300s 波形在标准去重后按此"
                          "宽窗再簇合并一次（每簇留置信度最高者）。0=关闭")
@@ -270,6 +277,7 @@ def main(argv=None) -> int:
         long_snr_min_s=args.long_snr_min_s,
         force_pair_short_s=args.force_pair_short_s,
         force_pair_floor=args.force_pair_floor,
+        force_pair_mode=args.force_pair_mode,
         long_dedup_s=args.long_dedup_s,
         tta_flip=args.tta_flip,
     )

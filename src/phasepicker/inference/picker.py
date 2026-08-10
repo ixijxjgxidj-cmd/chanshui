@@ -108,6 +108,13 @@ class PickerConfig:
     #:   低阈值 argmax 兜底大概率落在时分容差窗内。
     force_pair_max_duration_s: Optional[float] = None
     force_pair_floor: float = 0.03
+    #: 条件式兜底（2026-08-11 因应今年"含纯噪声条目"新规）：True 时仅当同台站
+    #: 另一相位在正常阈值上有触发（=确有事件的强证据）才补发本相位；纯噪声
+    #: 文件两相位都无触发 → 保持空输出，对噪声条目完全免疫。
+    #: 实测（三分布 56 个兜底改善文件）：条件式保留 +36.7/43.2 分（85%），
+    #: 放弃的 6.5 分换掉未知数量噪声条目 ×1.0 分/个的风险敞口。
+    #: SNR 闸方案已证否：真实兜底拾取 SNR 中位 0.03dB，与平稳噪声不可分。
+    force_pair_conditional: bool = True
     #: 长记录事件级去重：时长 > long_dedup_min_duration_s 的波形，在标准去重
     #: （合并窗 P 1s / S 3s）之后再按更宽的窗做一次簇合并（每簇留置信度最高者）。
     #: 动机（2026-08-10 残差归因）：长连续记录上滑窗推理把同一事件的余相/包络
@@ -291,42 +298,56 @@ class SeisBenchPicker(BasePicker):
         picks = sbu.PickList()
         thresholds = {"P": self._cfg.p_threshold, "S": self._cfg.s_threshold}
         prefix = self._model.__class__.__name__
+        ann_by_phase, picks_by_phase = {}, {}
         for phase, th in thresholds.items():
             phase_ann = ann.select(channel=f"{prefix}_{phase}")
             phase_picks = self._model.picks_from_annotations(phase_ann, th, phase)
             for p in phase_picks:
                 self._refine_peak_inplace(p, phase_ann)
-            phase_picks += self._fallback_lowth_picks(phase, phase_ann, stream, phase_picks)
-            picks += phase_picks
+            ann_by_phase[phase] = phase_ann
+            picks_by_phase[phase] = phase_picks
+        for phase in thresholds:
+            picks += picks_by_phase[phase]
+            picks += self._fallback_lowth_picks(phase, ann_by_phase, picks_by_phase, stream)
         return sbu.PickList(sorted(picks))
 
-    def _fallback_lowth_picks(self, phase: str, phase_ann, stream, existing) -> list:
+    def _fallback_lowth_picks(self, phase: str, ann_by_phase, picks_by_phase, stream) -> list:
         """短文件强制成对兜底（见 PickerConfig.force_pair_max_duration_s）。
 
         按台站粒度工作：合批推理时一个 stream 混编多个波形（临时台站码
         B00000...），必须逐台站判断"该相位是否零触发"，整 stream 粒度在
         合批路径下几乎永不触发（2026-08-10 首版 A/B 三分布逐位无变化的教训）。
+        条件式（默认）：仅当该台站另一相位在正常阈值上有触发才补发——纯噪声
+        文件两相位皆无触发 → 空输出，免疫今年新规的"纯噪声条目"。
         对零触发且时长 <= 上限的台站，用 force_pair_floor 低阈值重挑并只留
-        最高峰；曲线最大值仍低于地板时放弃（对冲真值无该相位的纯噪声文件）。
-        返回的 picks 已做亚采样精化。
+        最高峰；曲线最大值仍低于地板时放弃。返回的 picks 已做亚采样精化。
         """
         max_dur = self._cfg.force_pair_max_duration_s
-        if max_dur is None or len(phase_ann) == 0 or len(stream) == 0:
+        phase_ann = ann_by_phase.get(phase)
+        if max_dur is None or phase_ann is None or len(phase_ann) == 0 or len(stream) == 0:
             return []
         dur_by_sta: dict = {}
         for tr in stream:
             sta = tr.stats.station
             d = float(tr.stats.endtime - tr.stats.starttime)
             dur_by_sta[sta] = max(d, dur_by_sta.get(sta, 0.0))
-        have = set()
-        for p in existing:
-            tid = str(getattr(p, "trace_id", "") or "")
-            parts = tid.split(".")
-            if len(parts) >= 2:
-                have.add(parts[1])
+
+        def stations_of(picks) -> set:
+            out = set()
+            for p in picks:
+                parts = str(getattr(p, "trace_id", "") or "").split(".")
+                if len(parts) >= 2:
+                    out.add(parts[1])
+            return out
+
+        have = stations_of(picks_by_phase.get(phase, []))
+        other = "S" if phase == "P" else "P"
+        other_have = stations_of(picks_by_phase.get(other, []))
         out = []
         for sta, dur in dur_by_sta.items():
             if sta in have or dur > max_dur:
+                continue
+            if self._cfg.force_pair_conditional and sta not in other_have:
                 continue
             sel = phase_ann.select(station=sta)
             if len(sel) == 0:
@@ -682,11 +703,15 @@ class ProbEnsemblePicker(SeisBenchPicker):
 
         picks = sbu.PickList()
         prefix = self._model.__class__.__name__
+        ann_by_phase, picks_by_phase = {}, {}
         for phase, th in (("P", self._cfg.p_threshold), ("S", self._cfg.s_threshold)):
             phase_ann = base.select(channel=f"{prefix}_{phase}")
             phase_picks = self._model.picks_from_annotations(phase_ann, th, phase)
             for p in phase_picks:
                 self._refine_peak_inplace(p, phase_ann)
-            phase_picks += self._fallback_lowth_picks(phase, phase_ann, stream, phase_picks)
-            picks += phase_picks
+            ann_by_phase[phase] = phase_ann
+            picks_by_phase[phase] = phase_picks
+        for phase in ("P", "S"):
+            picks += picks_by_phase[phase]
+            picks += self._fallback_lowth_picks(phase, ann_by_phase, picks_by_phase, stream)
         return sbu.PickList(sorted(picks))
