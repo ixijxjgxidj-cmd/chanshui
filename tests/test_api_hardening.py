@@ -205,6 +205,13 @@ def test_cli_defaults_come_from_defaults_module():
     assert args.p_merge_window == defaults.DEFAULT_P_MERGE_WINDOW_S
     assert args.s_merge_window == defaults.DEFAULT_S_MERGE_WINDOW_S
     assert args.route is None  # 隐蔽入口默认关
+    # 服务端默认必须就是 2026-08-11 七成员生产后处理；部署脚本漏参也不能跑偏。
+    assert args.cap_short_s == 300.0
+    assert args.cap_max_p == args.cap_max_s == 1
+    assert args.long_snr_db == -1.0
+    assert args.force_pair_mode == "conditional"
+    assert args.long_dedup_s == 20.0
+    assert args.ensemble_long_members == 5
 
 
 # ---------------------------------------------------------------------------

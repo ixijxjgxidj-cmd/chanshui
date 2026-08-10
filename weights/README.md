@@ -1,9 +1,23 @@
-# weights/ 权重清单（2026-08-01 整理）
+# weights/ 权重清单（2026-08-11 发布版）
 
 > 部署用哪套、哪些已判死，以本表为准；分数出处：`deploy/README.md` 的 A/B 实测表、
 > 各 `*_progress.json` 评分快照、git log 提交说明。部署默认基座/阈值的单一真源在
 > `src/phasepicker/defaults.py`（当前 diting + P=0.2 / S=0.15）。
 > 「留出集」= 对应训练集自留 holdout 的官方计分；「真题」= 去年两轮真题包 ab_compare/全量评分（满分 2 分/文件）。
+
+## 当前生产发布
+
+- T1 七成员有序列表：`guangxi_sd.pt`、`jiangxi_sd.pt`、`shandong_sd.pt`、
+  `aug/exam_aug6_r2train_sd.pt`、`aug/crew_sp23_r2train_sd.pt`、
+  `geofon/geofon_m1_last_sd.pt`、`geofon/geofon_m3_last_sd.pt`。
+- 时长大于 300 秒的记录只使用列表前五个成员；第六、七个 GEOFON 事件窗成员
+  只参与短记录。三分布均分为 r1 1.786294 / r2 1.810140 / 08 2.010084。
+- T2/T3 部署包为 `official_r1_to_r2/t2_seismicxm_r1r2.joblib` 与
+  `official_r1_to_r2/t3_seismicxm_r1r2.joblib`。二者共用外置编码器
+  `seismicxm/seismicxm.middle.pt`（207,709,060 bytes，因 GitHub 100MB 限制不入库），
+  SHA-256 为 `671d02d677c25c3d075963889602299ec71f52c724470f2fa85bb28035fe1528`。
+- 完整成员顺序、每个文件的 SHA-256 和预测证据哈希见
+  `experiments/t1_g7_release_20260811.json`。
 
 | 文件 | 基座 / 训练数据 / 关键配置 | 留出集或真题分数 | 状态 |
 |---|---|---|---|
@@ -19,7 +33,7 @@
 | `phasenet_geonet_ft1_best.pt` | stead 微调；GeoNet（新西兰）FDSN 取数，10 epochs | 合成 5 条 2.0，无真题增益记录 | 留档（GeoNet 路线已归档） |
 | `phasenet_geonet_quick_best.pt` | stead 微调；GeoNet 83 条快速验证，commit 758d84d | 无留出/真题记录 | 留档（GeoNet 路线已归档） |
 | `phasenet_ft_diting_demo_best.pt` / `_last.pt` | stead 微调；DiTing demo 小样本（训崩修复后的链路验证品） | 合成 5 条 2.0 | 留档（链路验证品，非 diting 基座微调） |
-| `official_r1_to_r2/`（t2/t3 joblib + manifest） | T2 震级 / T3 事件分类树模型 baseline（第1轮训练→第2轮留出，commit 4c5c394） | 见 manifest.json | 留档（去年 .an 工具链用，今年 API 赛制不涉及） |
+| `official_r1_to_r2/`（t2/t3 joblib + manifest） | T2/T3 baseline 与 SeismicXM 最终部署包；API 默认选择 `t2_seismicxm_r1r2.joblib` / `t3_seismicxm_r1r2.joblib` | T2 r2 MAE **0.621**；T3 r2两类 **98.94%**、08五类 **89.3%** | **当前部署 + baseline 回退** |
 
 补充说明：
 

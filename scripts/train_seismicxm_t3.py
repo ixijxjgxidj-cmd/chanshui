@@ -2,7 +2,7 @@
 """训练 T3 SeismicXM 深度特征分类器并产出可部署 joblib.
 
 产出两个包（都含 sklearn Pipeline + 元数据）：
-  - t3_seismicxm_r1.joblib   ：仅第1轮训练——用于诚实验收（第2轮盲测应≈94.2%）；
+  - t3_seismicxm_r1.joblib   ：仅第1轮训练——用于诚实验收（第2轮盲测应≈98.9%）；
   - t3_seismicxm_r1r2.joblib ：两轮合训——部署默认（数据最大化）。
 
 特征优先读 scripts/seismicxm_t3_features.py 的缓存（outputs/seismicxm_t3/
@@ -63,10 +63,10 @@ def main() -> int:
         "notes": "SeismicXM middle hidden[:,:,0] 1024维；预处理见 tasks/seismicxm_features.py",
     }
 
-    # 1) 验收包：仅 r1 训练，r2 上用缓存特征打分（应复现 0.9418）
+    # 1) 验收包：仅 r1 训练，r2 上用 TTA 缓存特征打分（应复现 0.9894）
     p1 = build_pipeline().fit(Xd_tr, y_tr)
     acc_cached = float(np.mean(p1.predict(Xd_ev) == y_ev))
-    print(f"r1训练 → r2缓存特征评分：{acc_cached:.4f}（A/B 基准 0.9418，joblib 基线 0.8148）")
+    print(f"r1训练 → r2缓存特征评分：{acc_cached:.4f}（A/B 基准 0.9894，joblib 基线 0.8148）")
     save_bundle(os.path.join(args.outdir, "t3_seismicxm_r1.joblib"), p1,
                 {**meta_common, "train": "round1", "holdout_round2_acc": acc_cached})
 

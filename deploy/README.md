@@ -1,4 +1,4 @@
-# API 部署（P0 保底上线）
+# API 生产部署（七成员 T1 + SeismicXM T2/T3）
 
 ## 一键部署（推荐：2~4 vCPU 按量付费云主机）
 
@@ -11,10 +11,13 @@ seisbench 的每请求 ~2.7MB 原生内存泄漏（实测 300 请求增长从 ~9
 实测，见 `deploy/EVAL_DAY.md` T-1 的内存 soak 项）。
 
 ```bash
-git clone https://gitee.com/hulk-cheng/dizheng.git
+git clone https://github.com/ixijxjgxidj-cmd/dizheng-gpt5.6-sol.git dizheng
 cd dizheng
 sudo bash deploy/deploy_api.sh
 ```
+
+脚本默认使用 2026-08-11 七成员生产顺序，长记录只取前五成员，并显式启用
+300s 短记录限额、−1dB 长记录 SNR 闸、条件式强制成对和 20s 长记录去重。
 
 脚本做的事：装 venv 依赖（**版本按 `deploy/requirements.lock` 锁定**，torch 优先
 CPU 轮子）→ 从 `weights/*.tar.gz` 恢复 seisbench 权重缓存（**不走跨境下载**）→
@@ -25,7 +28,8 @@ CPU 轮子）→ 从 `weights/*.tar.gz` 恢复 seisbench 权重缓存（**不走
 
 1. 云控制台安全组放行 **TCP 8000**；
 2. 从外网机器复测后，把 `http://<公网IP>:8000/pick` 登记到比赛平台；
-3. 装评测日探活 cron 并过一遍 checklist：见 **[deploy/EVAL_DAY.md](EVAL_DAY.md)**。
+3. 确认 `weights/seismicxm/seismicxm.middle.pt` 已传入且 SHA-256 校验通过；
+4. 装评测日探活 cron 并过一遍 checklist：见 **[deploy/EVAL_DAY.md](EVAL_DAY.md)**。
 
 ## 依赖为什么锁版本（deploy/requirements.lock）
 

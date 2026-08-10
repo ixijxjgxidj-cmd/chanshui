@@ -50,12 +50,13 @@ class BaselineJoblibClassifier:
 
 
 class SeismicXMClassifier:
-    """SeismicXM(middle) 深度特征 + 逻辑回归的在线封装。
+    """SeismicXM(middle) 多窗 TTA 深度特征 + 余弦 kNN 的在线封装。
 
-    去年真题验收：第1轮训练→第2轮盲测 94.2%（joblib 基线 81.5%），见
-    scripts/train_seismicxm_t3.py。bundle 由该脚本产出，内含 sklearn Pipeline
-    与 encoder_weights 相对路径；编码器（51.9M Transformer，CPU 单文件约
-    0.2s）构建一次全程复用。类别语义与 baseline 相同（1..5 整数）。
+    去年真题验收：第1轮训练→第2轮两类盲测 98.94%（joblib 基线 81.5%）；
+    08 决赛五类盲测 183/205=89.3%，见 scripts/train_seismicxm_t3.py。bundle
+    由该脚本产出，内含 sklearn Pipeline
+    与 encoder_weights 相对路径；编码器（51.9M Transformer，CPU 最多五窗约
+    0.8s/文件）构建一次全程复用。类别语义与 baseline 相同（1..5 整数）。
     """
 
     name = "seismicxm"

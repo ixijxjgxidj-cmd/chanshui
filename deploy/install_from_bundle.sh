@@ -3,7 +3,7 @@
 # 从中转站分发的离线依赖包部署 API（GPU 机执行，零公网下载）
 #
 # 前提：/data/bundle/ 下已有 wheels.tar（54 个锁定版本依赖 + torch cu126）
-#       与 seismicxm.middle.pt（可选，SeismicXM 分类 94.2%）
+#       与 seismicxm.middle.pt（可选；T2 MAE 0.621，T3 r2两类98.9%/08五类89.3%）
 #
 # 用法（GPU 机）：
 #   bash /data/bundle/install_from_bundle.sh
@@ -31,7 +31,7 @@ echo "==================== [2/6] 仓库代码 ===================="
 if [ -d "$REPO/.git" ]; then
   cd "$REPO" && git pull --ff-only 2>&1 | tail -1
 else
-  git clone https://gitee.com/hulk-cheng/dizheng.git "$REPO" 2>&1 | tail -1
+  git clone https://github.com/ixijxjgxidj-cmd/dizheng-gpt5.6-sol.git "$REPO" 2>&1 | tail -1
 fi
 cd "$REPO"
 
@@ -59,7 +59,7 @@ echo "==================== [4/6] 权重 ===================="
 mkdir -p "$REPO/weights/seismicxm" "$REPO/.seisbench_cache"
 if [ -f "$BUNDLE/seismicxm.middle.pt" ] && [ ! -f "$REPO/weights/seismicxm/seismicxm.middle.pt" ]; then
   cp "$BUNDLE/seismicxm.middle.pt" "$REPO/weights/seismicxm/"
-  echo "SeismicXM 编码器已放置（分类 94.2%）"
+  echo "SeismicXM 编码器已放置（部署脚本将核对 SHA-256）"
 fi
 for f in "$REPO"/weights/phasenet_*_weights.tar.gz; do
   [ -f "$f" ] && tar xzf "$f" -C "$REPO/.seisbench_cache" && echo "恢复: $(basename "$f")"

@@ -19,6 +19,7 @@ data/seisbench_cache/
 # 本地临时
 *.log
 .DS_Store
+.playwright-mcp/
 
 # 本地评审/探针/中间产物（含敏感评审报告，不进公开仓库）
 outputs/
@@ -45,3 +46,8 @@ weights/ustc_pickers/*
 # fork 验证的集成第4/5成员(域内增强+CREW 微调), 三分布消融为正
 !weights/aug/
 !weights/aug/*.pt
+
+# GEOFON 候选只保留最终入选的 m1/m3 state_dict；完整 checkpoint 与淘汰成员留本地
+weights/geofon/*
+!weights/geofon/geofon_m1_last_sd.pt
+!weights/geofon/geofon_m3_last_sd.pt

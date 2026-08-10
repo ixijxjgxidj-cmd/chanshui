@@ -688,7 +688,7 @@ def main():
         print_score("微调后(真实)", after_ho)
         dh = after_ho["mean_score"] - before_ho["mean_score"]
         print("  真实平均分变化: %+.4f  %s" % (dh, "(提升↑)" if dh > 0 else "(未提升/退化)"))
-    print("\n权重已存: %s/best.pt  (小文件, 记得 push 回 Gitee 保住成果)" % args.out)
+    print("\n权重已存: %s/best.pt  (小文件, 记得 push 回 GitHub 保住成果)" % args.out)
     print("提示: 合成数据上预训练模型本就近满分, 关键看'微调后不崩';")
     print("      真正的提升要在真实【留出集】上才看得出来(用 --holdout 指定)。")
 

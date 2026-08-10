@@ -426,9 +426,9 @@ def build_engine(args) -> Engine:
             else float(getattr(args, "long_dedup_s", 20.0))
         ),
         tta_polarity_flip=bool(getattr(args, "tta_flip", False)),
-        # 长记录成员门控（2026-08-11 g6 验收：短文件6成员/长记录5成员三分布同向）
+        # 长记录成员门控（2026-08-11 g7 验收：短文件7成员/长记录5成员三分布同向）
         ensemble_long_top_n=(
-            int(getattr(args, "ensemble_long_members", 0)) or None
+            int(getattr(args, "ensemble_long_members", 5)) or None
         ),
     )
     # --weights 支持三种形态：空=纯预训练；单路径=单模型；逗号分隔=概率集成
@@ -444,6 +444,27 @@ def build_engine(args) -> Engine:
 
         cfg = dataclasses.replace(cfg, local_weights_path=args.weights)
         picker = SeisBenchPicker.from_config(cfg)
+
+    long_snr_desc = (
+        "off" if getattr(args, "no_long_snr", False)
+        else f"{float(getattr(args, 'long_snr_db', -1.0)):g}dB"
+    )
+    force_pair_desc = (
+        "off" if getattr(args, "no_force_pair", False)
+        else str(getattr(args, "force_pair_mode", "conditional"))
+    )
+    long_dedup_desc = (
+        "off" if getattr(args, "no_long_dedup", False)
+        else f"{float(getattr(args, 'long_dedup_s', 20.0)):g}s"
+    )
+    print(
+        "T1 有效配置: "
+        f"cap<={float(getattr(args, 'cap_short_s', 0.0) or 0.0):g}s "
+        f"(P<={int(getattr(args, 'cap_max_p', 1))},S<={int(getattr(args, 'cap_max_s', 1))}); "
+        f"long_snr={long_snr_desc}; force_pair={force_pair_desc}; "
+        f"long_dedup={long_dedup_desc}; "
+        f"ensemble_long_members={int(getattr(args, 'ensemble_long_members', 5)) or 'all'}"
+    )
 
     # 震级估计器：构建失败绝不拖垮 /pick 主业务——降级为 None（端点 501）并留痕
     mag = None
@@ -771,8 +792,8 @@ def make_arg_parser() -> argparse.ArgumentParser:
                          "--mag-model 选 t2_seismicxm_r1r2.joblib 或 "
                          "t2_magnitude_baseline.joblib）")
     ap.add_argument("--cls-model", default="seismicxm", choices=["seismicxm", "baseline", "off"],
-                    help="/classify 端点的分类器：seismicxm=深度特征+逻辑回归"
-                         "（r2 留出准确率 94.2%%，需 weights/seismicxm/ 权重）；"
+                    help="/classify 端点的分类器：seismicxm=多窗TTA深度特征+余弦kNN"
+                         "（r2 两类留出 98.9%%；08 五类盲测 89.3%%；需 weights/seismicxm/ 权重）；"
                          "baseline=去年 T3 特征树（81.5%%）；off=501。"
                          "构建失败自动降级到 501，绝不影响 /pick")
     ap.add_argument("--cls-weights", default=None,
@@ -821,9 +842,9 @@ def make_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--tta-flip", action="store_true",
                     help="推理端 TTA：极性翻转副本并入概率平均（集成路径，耗时×2；"
                          "默认关，三分布验证通过后才开）")
-    ap.add_argument("--ensemble-long-members", type=int, default=0,
-                    help=">300s 长记录只用集成前 N 个成员（0=全部）。事件窗训练的"
-                         "成员（如 GEOFON 微调）放 --weights 列表尾部，长记录自动排除")
+    ap.add_argument("--ensemble-long-members", type=int, default=5,
+                    help=">300s 长记录只用集成前 N 个成员（0=全部）。默认 5=七成员生产配置；"
+                         "事件窗训练的成员（如 GEOFON 微调）放 --weights 列表尾部，长记录自动排除")
     ap.add_argument("--capture-dir", default=None,
                     help="请求采集目录：把评测方 POST 的原始波形+我们的响应落盘"
                          "（响应发回后的后台任务写盘，评测方零延迟感知；磁盘余量"

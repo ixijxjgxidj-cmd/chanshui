@@ -70,7 +70,7 @@ def test_classify_payload_contract():
 
 def test_cli_defaults_classify_on():
     args = serve_api.make_arg_parser().parse_args([])
-    assert args.cls_model == "seismicxm"  # 2026-08 起默认深度分类器（r2 留出 94.2%）
+    assert args.cls_model == "seismicxm"  # 2026-08 起默认 TTA+kNN（r2 两类 98.9%）
     assert args.cls_weights is None
 
 

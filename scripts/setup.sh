@@ -6,21 +6,21 @@
 #
 # 用法:  bash setup.sh
 #
-# 前提: 你已把权重备份 phasenet_stead_weights.tar.gz 传回 /data/coding/
+# 前提: 你已把权重备份 phasenet_diting_weights.tar.gz 传回 /data/coding/
 #       (下载到本地的那个 1.1MB 文件; 没有它脚本会自动跨境重下, 慢但仍可用)
 # =============================================================================
 set -e
 
-# 自动定位脚本所在目录 -> 仓库根 -> 权重备份，Gitee clone 到任何路径都能用
+# 自动定位脚本所在目录 -> 仓库根 -> 权重备份，GitHub clone 到任何路径都能用
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 CACHE=/data/seisbench_cache
 # 权重优先找仓库里的 weights/，找不到再退回 /data/coding/
-if [ -f "$REPO_ROOT/weights/phasenet_stead_weights.tar.gz" ]; then
-  WEIGHT_BACKUP="$REPO_ROOT/weights/phasenet_stead_weights.tar.gz"
+if [ -f "$REPO_ROOT/weights/phasenet_diting_weights.tar.gz" ]; then
+  WEIGHT_BACKUP="$REPO_ROOT/weights/phasenet_diting_weights.tar.gz"
 else
-  WEIGHT_BACKUP=/data/coding/phasenet_stead_weights.tar.gz
+  WEIGHT_BACKUP=/data/coding/phasenet_diting_weights.tar.gz
 fi
 
 echo "==================== [1/5] 基本信息 ===================="
@@ -59,5 +59,8 @@ x = torch.randn(1000, 1000).cuda()
 print("OK GPU compute:", float((x @ x).sum()))
 print("torch", torch.__version__, "|", torch.cuda.get_device_name(0))
 import seisbench.models as sbm
-m = sbm.PhaseNet.from_pretrained("stead")
-print("PhaseNet 
+m = sbm.PhaseNet.from_pretrained("diting")
+print("PhaseNet('diting') loaded:", m.sampling_rate, "Hz,", m.in_samples, "samples")
+PYEOF
+
+echo "==================== SETUP OK ===================="

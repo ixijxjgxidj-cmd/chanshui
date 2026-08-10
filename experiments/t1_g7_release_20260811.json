@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "release_id": "t1_g7_release_20260811",
+  "created_at": "2026-08-11T00:00:00+08:00",
+  "parent_commit": "169ce14",
+  "status": "production_candidate",
+  "ordered_members": [
+    {
+      "name": "guangxi",
+      "path": "weights/ustc_pickers/guangxi_sd.pt",
+      "sha256": "a085027434b6b7c176b690b5905e858f12d882796c4f336544ccbf0da853086d"
+    },
+    {
+      "name": "jiangxi",
+      "path": "weights/ustc_pickers/jiangxi_sd.pt",
+      "sha256": "166f94b180db775cc20e65b9afea03f263ab693354f569a019b83fa08256010a"
+    },
+    {
+      "name": "shandong",
+      "path": "weights/ustc_pickers/shandong_sd.pt",
+      "sha256": "5c959f8872bb5cef12af3bb908feb5140399bc281fd1361995453b66841fdf3c"
+    },
+    {
+      "name": "exam_aug6_r2train",
+      "path": "weights/aug/exam_aug6_r2train_sd.pt",
+      "sha256": "ba68e50bf6b18ae54072814ba1ed5f0b94a6cb08b890055f3155b88f89106250"
+    },
+    {
+      "name": "crew_sp23_r2train",
+      "path": "weights/aug/crew_sp23_r2train_sd.pt",
+      "sha256": "8ecb8dacd0da4d0d365da906bd20454e2ba1a9943d0635a21051e6d8e98725b0"
+    },
+    {
+      "name": "geofon_m1_last",
+      "path": "weights/geofon/geofon_m1_last_sd.pt",
+      "sha256": "05df8fd213cdc8e2b8e5b3d3b66f6f8436e7009d6dd011560cbb7f149e7a8c14"
+    },
+    {
+      "name": "geofon_m3_last",
+      "path": "weights/geofon/geofon_m3_last_sd.pt",
+      "sha256": "822398ac041f3f523697f56fbf9a79499ba978751848027ffcb74244323674ba"
+    }
+  ],
+  "production_config": {
+    "pretrained": "diting",
+    "cap_short_s": 300.0,
+    "cap_max_p": 1,
+    "cap_max_s": 1,
+    "long_snr_db": -1.0,
+    "long_snr_min_s": 300.0,
+    "force_pair_short_s": 300.0,
+    "force_pair_floor": 0.03,
+    "force_pair_mode": "conditional",
+    "long_dedup_s": 20.0,
+    "ensemble_long_members": 5,
+    "tta_polarity_flip": false
+  },
+  "validation": {
+    "all_prediction_files_complete": true,
+    "scores_mean_per_file": {
+      "round1": 1.786294,
+      "round2": 1.810140,
+      "final08": 2.010084
+    },
+    "prediction_sha256": {
+      "outputs/port_verify/r1_g7.an": "4964fe2a5f174337f8532c708411d8ea9bc13552602849655b64c091ae543db6",
+      "outputs/port_verify/r2_g7.an": "a9166062489a01e055679568c5e1bd6a614bee816ba18d2454a7e3244259e304",
+      "outputs/port_verify/f08_g7.an": "68520ec2d4b2047410b7b3af6a35f5b0f730302ae5538400d82df3414cea71e6"
+    },
+    "known_answer_package_sha256": {
+      "round2_r2exam.zip": "d5ffc69223ab75815618e7647e4212d39e4c0e756a91c1e6ee04cb55c29f54e6",
+      "round1": null,
+      "final08": null
+    },
+    "note": "Prediction files are intentionally ignored by Git; their hashes preserve the exact evidence identity. Round1/final08 source-package hashes were not retained in this repository."
+  },
+  "training_provenance": {
+    "geofon_m1": {
+      "data": "/home/azureuser/pool/mix_train_aug.hdf5",
+      "epochs": 30,
+      "batch": 32,
+      "learning_rate": 0.00003,
+      "phase_weight": 5,
+      "update_bn": false,
+      "seed": 42,
+      "pretrained": "diting",
+      "sampling_rate_hz": 50,
+      "selection": "last state_dict selected by three-distribution external validation; no real holdout configured"
+    },
+    "geofon_m3": {
+      "recipe_recorded_in_repository": false,
+      "selection": "last state_dict selected by three-distribution external validation",
+      "caveat": "Exact pool composition and command must be recovered before retraining; this release preserves the selected state_dict and its hash."
+    }
+  },
+  "task_model_bundles": {
+    "weights/official_r1_to_r2/t2_seismicxm_r1r2.joblib": {
+      "sha256": "41f4ab9f67daa98889fd921a22d33b750d58c137efe81b850e3ac2329d16d5e1",
+      "validation": "round1+round2 training bundle; round1-to-round2 holdout MAE 0.6210484; final08 MAE approximately 0.523"
+    },
+    "weights/official_r1_to_r2/t3_seismicxm_r1r2.joblib": {
+      "sha256": "75f5ed29d7995651f53798bbdbdfe06110257cdad11b376b1169971090e8cdbb",
+      "validation": "TTA+cosine kNN(k=5); round1-to-round2 two-class accuracy 98.94%; final08 five-class accuracy 183/205=89.3%"
+    }
+  },
+  "external_assets": {
+    "weights/seismicxm/seismicxm.middle.pt": {
+      "required_for": ["T2 seismicxm", "T3 seismicxm"],
+      "size_bytes": 207709060,
+      "sha256": "671d02d677c25c3d075963889602299ec71f52c724470f2fa85bb28035fe1528",
+      "tracked_by_git": false,
+      "distribution": "SSH copy or GitHub Release/LFS/object storage; verify SHA-256 before startup"
+    }
+  }
+}

@@ -3,13 +3,18 @@
 # 云主机一键部署：震相拾取 API（P0 保底上线，2~4 vCPU 的阿里云/华为云 CPU 机即可）
 #
 # 用法（服务器上）：
-#   git clone https://gitee.com/hulk-cheng/dizheng.git && cd dizheng
+#   git clone https://github.com/ixijxjgxidj-cmd/dizheng-gpt5.6-sol.git dizheng && cd dizheng
 #   sudo bash deploy/deploy_api.sh
 #
 # 可用环境变量覆盖：
 #   PORT=8000                  # 服务端口
 #   PRETRAINED=diting          # SeisBench 基座（A/B 实测 diting > stead，见 README）
-#   WEIGHTS=/path/xx.pt        # 换微调权重时指定（P2 产出 best.pt 后热切用）
+#   WEIGHTS=<逗号分隔成员>     # 默认=2026-08-11 七成员生产顺序；可覆盖做降级/试验
+#   ENSEMBLE_LONG_MEMBERS=5    # >300s 只用前5成员；七成员生产配置不可漏
+#   CAP_SHORT_S=300 CAP_MAX_P=1 CAP_MAX_S=1
+#   LONG_SNR_DB=-1.0 LONG_SNR_MIN_S=300
+#   FORCE_PAIR_SHORT_S=300 FORCE_PAIR_MODE=conditional FORCE_PAIR_FLOOR=0.03
+#   LONG_DEDUP_S=20
 #   P_THRESHOLD= / S_THRESHOLD=            # 拾取阈值；留空 = 用代码内全局默认
 #   P_MERGE_WINDOW= / S_MERGE_WINDOW=      # 去重合并窗(秒)；留空 = 用代码内全局默认
 #                              #（全局默认见 src/phasepicker/defaults.py，P3 网格产出后从这里接入）
@@ -36,7 +41,20 @@ set -euo pipefail
 
 PORT="${PORT:-8000}"
 PRETRAINED="${PRETRAINED:-diting}"
-WEIGHTS="${WEIGHTS:-}"
+PRODUCTION_WEIGHTS="guangxi,jiangxi,shandong,weights/aug/exam_aug6_r2train_sd.pt,weights/aug/crew_sp23_r2train_sd.pt,weights/geofon/geofon_m1_last_sd.pt,weights/geofon/geofon_m3_last_sd.pt"
+WEIGHTS="${WEIGHTS:-$PRODUCTION_WEIGHTS}"
+CAP_SHORT_S="${CAP_SHORT_S:-300}"
+CAP_MAX_P="${CAP_MAX_P:-1}"
+CAP_MAX_S="${CAP_MAX_S:-1}"
+LONG_SNR_DB="${LONG_SNR_DB:--1.0}"
+LONG_SNR_MIN_S="${LONG_SNR_MIN_S:-300}"
+FORCE_PAIR_SHORT_S="${FORCE_PAIR_SHORT_S:-300}"
+FORCE_PAIR_MODE="${FORCE_PAIR_MODE:-conditional}"
+FORCE_PAIR_FLOOR="${FORCE_PAIR_FLOOR:-0.03}"
+LONG_DEDUP_S="${LONG_DEDUP_S:-20}"
+ENSEMBLE_LONG_MEMBERS="${ENSEMBLE_LONG_MEMBERS:-5}"
+MAG_MODEL="${MAG_MODEL:-seismicxm}"
+CLS_MODEL="${CLS_MODEL:-seismicxm}"
 P_THRESHOLD="${P_THRESHOLD:-}"
 S_THRESHOLD="${S_THRESHOLD:-}"
 P_MERGE_WINDOW="${P_MERGE_WINDOW:-}"
@@ -120,20 +138,32 @@ m = sbm.PhaseNet.from_pretrained("$PRETRAINED")
 print("PhaseNet('$PRETRAINED') 加载成功: 采样率", m.sampling_rate, "Hz, 输入", m.in_samples, "点")
 PYEOF
 
-# 分类器权重探测：SeismicXM(94.2%) 需要 207MB encoder 权重（git 传不了，靠 scp）。
-# 不在就自动回退 baseline(81.5%)——/classify 仍可用，只是分数低一档。
+# T2/T3 共用的 SeismicXM encoder 约 208MB（超过 GitHub 单文件限制，靠 scp/发布资产）。
+# T3 当前为 TTA+余弦kNN：r2 两类 98.9%，08 五类 89.3%；不在则回退 baseline 81.5%。
 SXM="$REPO_ROOT/weights/seismicxm/seismicxm.middle.pt"
+SXM_SHA256="671d02d677c25c3d075963889602299ec71f52c724470f2fa85bb28035fe1528"
 if [ -f "$SXM" ]; then
-  echo "分类器: SeismicXM 深度特征就绪（r2 留出 94.2%）—— $(du -h "$SXM" | cut -f1)"
+  ACTUAL_SXM_SHA256="$(sha256sum "$SXM" | awk '{print $1}')"
+  if [ "$ACTUAL_SXM_SHA256" != "$SXM_SHA256" ]; then
+    echo "!! SeismicXM 编码器 SHA-256 不匹配，拒绝加载损坏/错误权重"
+    echo "   期望: $SXM_SHA256"
+    echo "   实际: $ACTUAL_SXM_SHA256"
+    exit 1
+  fi
+  echo "SeismicXM 编码器就绪且校验通过（T2 MAE 0.621；T3 r2 98.9% / 08五类 89.3%）—— $(du -h "$SXM" | cut -f1)"
 else
-  echo "分类器: !! 未找到 $SXM —— /classify 将回退 baseline(81.5%)。"
-  echo "         要用 94.2% 版，从本地传 encoder 权重后重跑本脚本："
-  echo "         scp -P <ssh端口> weights/seismicxm/seismicxm.middle.pt root@<主机>:$REPO_ROOT/weights/seismicxm/"
+  echo "T2/T3: !! 未找到 $SXM —— 将回退 baseline。"
+  echo "       要用当前 SeismicXM 版，从本地传 encoder 权重后重跑本脚本："
+  echo "         scp -P <ssh端口> weights/seismicxm/seismicxm.middle.pt <用户>@<主机>:$REPO_ROOT/weights/seismicxm/"
 fi
 
 echo "==================== [4/6] 安装服务 ===================="
-EXTRA_ARGS=""
-[ -n "$WEIGHTS" ] && EXTRA_ARGS="$EXTRA_ARGS --weights $WEIGHTS"
+EXTRA_ARGS=" --weights $WEIGHTS"
+EXTRA_ARGS="$EXTRA_ARGS --cap-short-s $CAP_SHORT_S --cap-max-p $CAP_MAX_P --cap-max-s $CAP_MAX_S"
+EXTRA_ARGS="$EXTRA_ARGS --long-snr-db $LONG_SNR_DB --long-snr-min-s $LONG_SNR_MIN_S"
+EXTRA_ARGS="$EXTRA_ARGS --force-pair-short-s $FORCE_PAIR_SHORT_S --force-pair-mode $FORCE_PAIR_MODE --force-pair-floor $FORCE_PAIR_FLOOR"
+EXTRA_ARGS="$EXTRA_ARGS --long-dedup-s $LONG_DEDUP_S --ensemble-long-members $ENSEMBLE_LONG_MEMBERS"
+EXTRA_ARGS="$EXTRA_ARGS --mag-model $MAG_MODEL --cls-model $CLS_MODEL"
 [ -n "$P_THRESHOLD" ] && EXTRA_ARGS="$EXTRA_ARGS --p-threshold $P_THRESHOLD"
 [ -n "$S_THRESHOLD" ] && EXTRA_ARGS="$EXTRA_ARGS --s-threshold $S_THRESHOLD"
 [ -n "$P_MERGE_WINDOW" ] && EXTRA_ARGS="$EXTRA_ARGS --p-merge-window $P_MERGE_WINDOW"
@@ -145,6 +175,8 @@ if [ "$CAPTURE_DIR" != "off" ]; then
   EXTRA_ARGS="$EXTRA_ARGS --capture-dir $CAPTURE_DIR"
 fi
 START_CMD="$PY $REPO_ROOT/scripts/serve_api.py --pretrained $PRETRAINED --device $DEVICE --host 0.0.0.0 --port $PORT --threads $THREADS$EXTRA_ARGS"
+echo "生产成员顺序: $WEIGHTS"
+echo "长记录成员数: $ENSEMBLE_LONG_MEMBERS | cap: ${CAP_SHORT_S}s P${CAP_MAX_P}/S${CAP_MAX_S} | SNR: ${LONG_SNR_DB}dB | force-pair: $FORCE_PAIR_MODE | dedup: ${LONG_DEDUP_S}s"
 echo "启动命令: $START_CMD"
 
 # 无论走哪条分支，先按 PID 文件把上一轮 nohup 兜底进程清干净：

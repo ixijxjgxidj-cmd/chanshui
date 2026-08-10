@@ -15,7 +15,7 @@
 
 ```bash
 # 0) 环境（CPU torch 即可）
-git clone <gitee仓库> dizheng && cd dizheng
+git clone https://github.com/ixijxjgxidj-cmd/dizheng-gpt5.6-sol.git dizheng && cd dizheng
 pip install torch obspy seisbench scikit-learn h5py tqdm
 # 上传本机产物：outputs/train/r2train.h5（33MB，真题锚点池）
 

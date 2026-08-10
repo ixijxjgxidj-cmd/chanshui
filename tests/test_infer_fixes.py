@@ -1,4 +1,4 @@
-"""fix:infer 修复的单元测试（评审 U3 / U4 / U20 / U17 及合并窗配置管道）.
+"""推理修复与当前生产后处理的单元测试.
 
 覆盖:
 - U3 末端护栏: pick()/pick_batch() 丢弃越过真实数据末尾+0.5s 的 pick,
@@ -7,6 +7,7 @@
   完全无分量才丢; 有降级告警记录
 - U17 置信度带出: Task1Result 新增并行置信度列表, 不破坏旧构造/相等性/写出格式
 - 合并窗管道: PickerConfig 的 p/s_merge_window_s → DedupConfig, None 落到 defaults.py
+- 生产后处理: 条件式强制成对、长记录 SNR 闸、20s 去重、七成员长记录门控
 
 两种运行方式:
     pytest tests/test_infer_fixes.py
@@ -27,6 +28,7 @@ from phasepicker.types import PhaseType, Pick, Task1Result, Waveform  # noqa: E4
 from phasepicker.inference.picker import (  # noqa: E402
     END_GUARD_TOLERANCE_S,
     PickerConfig,
+    ProbEnsemblePicker,
     SeisBenchPicker,
 )
 from phasepicker.postprocess.dedup import DEFAULT_MERGE_WINDOW_S, DedupConfig  # noqa: E402
@@ -155,6 +157,142 @@ def test_merge_window_actually_applied_in_pick():
     # 配置 2s 窗: 合并为置信度最高的那个
     merged = _mk_picker(fake, cfg=PickerConfig(p_merge_window_s=2.0)).pick(wf)
     assert [(p.time_utc, p.confidence) for p in merged] == [(1010.0, 0.9)]
+
+
+# ---------------------------------------------------------------------------
+# 2026-08-11 生产后处理
+# ---------------------------------------------------------------------------
+class _FakeAnnotations:
+    def __len__(self):
+        return 1
+
+    def select(self, **_kwargs):
+        return self
+
+
+def test_conditional_force_pair_keeps_pure_noise_empty():
+    """两相位正常阈值都无触发时，不得在纯噪声上强行补 P/S。"""
+    cfg = PickerConfig(
+        force_pair_max_duration_s=300.0,
+        force_pair_floor=0.03,
+        force_pair_conditional=True,
+    )
+    picker = _mk_picker([], cfg=cfg)
+    trace = SimpleNamespace(
+        stats=SimpleNamespace(station="B00000", starttime=0.0, endtime=60.0)
+    )
+    got = picker._fallback_lowth_picks(
+        "P",
+        {"P": _FakeAnnotations(), "S": _FakeAnnotations()},
+        {"P": [], "S": []},
+        [trace],
+    )
+    assert got == []
+
+
+def test_long_record_snr_gate_drops_falling_energy_pick():
+    sr = 10.0
+    data = np.ones((3, 4000), dtype=np.float32)  # 400s，超过生产阈值
+    # 100s: 到时后能量下降 20dB，应丢弃。
+    data[:, 980:1000] = 10.0
+    data[:, 1000:1020] = 1.0
+    # 200s: 到时后能量上升 20dB，应保留。
+    data[:, 1980:2000] = 1.0
+    data[:, 2000:2020] = 10.0
+    wf = Waveform(data=data, sampling_rate=sr, starttime_utc=0.0, station="XB.TST")
+    bad = _pick(PhaseType.P, 100.0, 0.9)
+    good = _pick(PhaseType.S, 200.0, 0.8)
+    cfg = PickerConfig(
+        long_snr_threshold_db=-1.0,
+        long_snr_min_duration_s=300.0,
+        long_snr_pre_s=2.0,
+        long_snr_post_s=2.0,
+    )
+    kept = _mk_picker([], cfg=cfg)._filter_long_snr(wf, [bad, good])
+    assert kept == [good]
+
+
+def test_long_record_dedup_uses_20_second_window_only_above_300s():
+    cfg = PickerConfig(
+        long_dedup_p_window_s=20.0,
+        long_dedup_s_window_s=20.0,
+        long_dedup_min_duration_s=300.0,
+    )
+    picker = _mk_picker([], cfg=cfg)
+    picks = [
+        _pick(PhaseType.P, 100.0, 0.4),
+        _pick(PhaseType.P, 110.0, 0.9),
+        _pick(PhaseType.P, 150.0, 0.8),
+    ]
+    long_wf = _mk_wf(n=4001, sr=10.0, start=0.0)
+    got = picker._long_dedup(long_wf, picks)
+    assert [(p.time_utc, p.confidence) for p in got] == [(110.0, 0.9), (150.0, 0.8)]
+
+    boundary_wf = _mk_wf(n=3000, sr=10.0, start=0.0)  # 恰好 300s，不启用
+    assert picker._long_dedup(boundary_wf, picks) is picks
+
+
+class _FakeProbModel:
+    in_samples = 3001
+    sampling_rate = 100.0
+
+    def __init__(self, value, record=False):
+        self.value = float(value)
+        self.means = [] if record else None
+
+    def annotate(self, stream, **_kwargs):
+        obspy = pytest.importorskip("obspy")
+        out = obspy.Stream()
+        for src in stream:
+            for phase in ("P", "S"):
+                tr = obspy.Trace(data=np.full(len(src.data), self.value, dtype=np.float32))
+                tr.stats.network = src.stats.network
+                tr.stats.station = src.stats.station
+                tr.stats.location = src.stats.location
+                tr.stats.channel = f"{self.__class__.__name__}_{phase}"
+                tr.stats.starttime = src.stats.starttime
+                tr.stats.sampling_rate = src.stats.sampling_rate
+                out += tr
+        return out
+
+    def picks_from_annotations(self, annotations, _threshold, phase):
+        if self.means is not None:
+            self.means.append((phase, float(np.mean(annotations[0].data))))
+        return []
+
+    def parameters(self):
+        return iter([])
+
+
+def _ensemble_input(duration_s):
+    obspy = pytest.importorskip("obspy")
+    sr = 10.0
+    tr = obspy.Trace(data=np.zeros(int(duration_s * sr) + 1, dtype=np.float32))
+    tr.stats.network = "XB"
+    tr.stats.station = "TST"
+    tr.stats.location = ""
+    tr.stats.channel = "HHZ"
+    tr.stats.starttime = obspy.UTCDateTime(0)
+    tr.stats.sampling_rate = sr
+    return obspy.Stream([tr])
+
+
+def test_seven_member_ensemble_uses_only_first_five_for_long_records():
+    pytest.importorskip("seisbench")
+    host = _FakeProbModel(1, record=True)
+    picker = ProbEnsemblePicker(
+        host,
+        PickerConfig(ensemble_long_top_n=5, ensemble_long_max_duration_s=300.0),
+    )
+    picker._members = [host] + [_FakeProbModel(i) for i in range(2, 8)]
+
+    picker._classify_refined(_ensemble_input(100.0))
+    short_means = [value for _phase, value in host.means[-2:]]
+    assert short_means == pytest.approx([4.0, 4.0])  # mean(1..7)
+
+    picker._classify_refined(_ensemble_input(400.0))
+    long_means = [value for _phase, value in host.means[-2:]]
+    assert long_means == pytest.approx([3.0, 3.0])  # mean(1..5)
 
 
 # ---------------------------------------------------------------------------

@@ -1,15 +1,15 @@
 # SeismicXM + 广西权重 部署清单（2026-08 模型升级批次）
 
-> 状态：**待执行**（用户暂缓部署）。本文档只描述"这次升级比上次部署多做什么"，
-> 基线部署流程见 EVAL_DAY.md / 容器实况。
+> 状态：**GitHub 发布版已就绪，待部署到新服务器**。本文档描述本次升级与验收口径；
+> 通用部署和评测日流程见 `deploy/README.md` / `deploy/EVAL_DAY.md`。
 
-## 本批次上线内容（本地已全部验收，git 已提交）
+## 本批次上线内容（本地已全部验收，随七成员发布提交）
 
 | 组件 | 变化 | 验收成绩 |
 |---|---|---|
-| T1 拾取 | diting → **6成员概率集成（长记录门控前5）+ 短文件限额 + SNR闸 + 条件式强制成对 + 长记录去重**（2026-08-11 定稿） | 三分布盲测 r1 **1.781** / r2 **1.805** / 08决赛 **2.008**（GEOFON 第6成员用 last_sd；长文件与5成员逐位一致） |
+| T1 拾取 | diting → **7成员概率集成（长记录门控前5）+ 短文件限额 + SNR闸 + 条件式强制成对 + 长记录去重**（2026-08-11 定稿） | 三分布盲测 r1 **1.786294** / r2 **1.810140** / 08决赛 **2.010084**（GEOFON m1/m3 为第6/7成员；长记录固定排除） |
 | T2 震级 | joblib 特征树 → **SeismicXM deep1024+Ridge** | MAE 0.817→**0.621** |
-| T3 分类 | joblib 特征树 → **SeismicXM TTA+余弦kNN(k=5)** | 81.5%→**98.9%** |
+| T3 分类 | joblib 特征树 → **SeismicXM TTA+余弦kNN(k=5)** | r2 两类 81.5%→**98.94%**；08 五类盲测 **89.3%（183/205）** |
 
 2026-08-11 官方群确认的规则情报：
 - 计分规则与本仓 scorer.py 逐条一致；"每文件答案个数不定"确认多相位合法
@@ -25,9 +25,10 @@ overlap 0.75（r2 −2.1）、overlap 0.9（r2 +6.5 但 08 −2.4 三分布不�
 
 ## 需要新上传到容器的文件
 
-- `weights/seismicxm/seismicxm.middle.pt`（**208MB**，不在 git；scp/rsync 上去）
+- `weights/seismicxm/seismicxm.middle.pt`（207,709,060 bytes，不在 git；scp/rsync 上去；
+  SHA-256 `671d02d677c25c3d075963889602299ec71f52c724470f2fa85bb28035fe1528`）
 - `git pull` 带上：`weights/ustc_pickers/guangxi_sd.pt`、
-  `weights/aug/{exam_aug6,crew_sp23}_r2train_sd.pt`、`weights/geofon/geofon_m1_last_sd.pt`（T1 集成第4/5/6成员，已在 git）、
+  `weights/aug/{exam_aug6,crew_sp23}_r2train_sd.pt`、`weights/geofon/geofon_m{1,3}_last_sd.pt`（T1 集成第4-7成员，已在 git）、
   `weights/official_r1_to_r2/t{2,3}_seismicxm_r1r2.joblib`、
   `src/phasepicker/vendor/`（SeismicXM 模型定义）及全部代码改动
 
@@ -39,11 +40,11 @@ git pull
 # 权重就位检查（缺 seismicxm 会自动回退旧 baseline 不报错——要看启动日志！）
 ls -la weights/seismicxm/seismicxm.middle.pt weights/ustc_pickers/*_sd.pt \
       weights/aug/*_sd.pt weights/official_r1_to_r2/t2_seismicxm_r1r2.joblib
-# 启动（T1 生产配置 2026-08-10 定稿：5成员集成 + 短文件限额 + SNR闸 +
-#       强制成对兜底 + 长记录去重(20s)，三分布 r1 1.779 / r2 1.801 / 08 2.009。
+# 启动（T1 生产配置 2026-08-11 定稿：7成员集成、长记录仅前5 + 短文件限额 + SNR闸 +
+#       条件式强制成对 + 长记录去重(20s)，三分布 r1 1.786294 / r2 1.810140 / 08 2.010084。
 #       cap/SNR/force-pair/long-dedup 均为 serve_api 默认值，显式写出防误改）
 python scripts/serve_api.py --port 8000 \
-  --weights "guangxi,jiangxi,shandong,weights/aug/exam_aug6_r2train_sd.pt,weights/aug/crew_sp23_r2train_sd.pt,weights/geofon/geofon_m1_last_sd.pt" \
+  --weights "guangxi,jiangxi,shandong,weights/aug/exam_aug6_r2train_sd.pt,weights/aug/crew_sp23_r2train_sd.pt,weights/geofon/geofon_m1_last_sd.pt,weights/geofon/geofon_m3_last_sd.pt" \
   --cap-short-s 300 --cap-max-p 1 --cap-max-s 1 --long-snr-db -1.0 \
   --force-pair-short-s 300 --force-pair-mode conditional \
   --long-dedup-s 20 --ensemble-long-members 5
@@ -52,7 +53,8 @@ python scripts/serve_api.py --port 8000 \
 ## 启动日志必须出现（缺一不可，出现"回退"字样=权重没就位）
 
 ```
-拾取器: 概率集成 × 6 成员 ['guangxi', 'jiangxi', 'shandong', 'weights/aug/exam_aug6_r2train_sd.pt', 'weights/aug/crew_sp23_r2train_sd.pt', 'weights/geofon/geofon_m1_last_sd.pt']
+拾取器: 概率集成 × 7 成员 ['guangxi', 'jiangxi', 'shandong', 'weights/aug/exam_aug6_r2train_sd.pt', 'weights/aug/crew_sp23_r2train_sd.pt', 'weights/geofon/geofon_m1_last_sd.pt', 'weights/geofon/geofon_m3_last_sd.pt']
+T1 有效配置: cap<=300s (P<=1,S<=1); long_snr=-1dB; force_pair=conditional; long_dedup=20s; ensemble_long_members=5
 震级估计器: seismicxm 已就绪
 分类器: seismicxm 已就绪
 ```

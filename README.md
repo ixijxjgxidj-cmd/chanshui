@@ -2,7 +2,7 @@
 
 面向"中国（广西）—东盟人工智能+应急管理科技创新大赛 / 防震减灾专项赛道 · 自动震相拾取"的工程代码。
 
-这个仓库存在的首要目的：**GPU 免费主机关机即清空，用 Gitee 仓库做持久化。每次开机 `git clone` 一条命令拉回全部环境。**
+这个仓库存在的首要目的：**用 GitHub 保存可复现的代码、小型生产权重与发布记录；临时 GPU 主机关机后，可通过一次 `git clone` 恢复。超过 GitHub 单文件限制的 SeismicXM 编码器单独校验和分发。**
 
 ---
 
@@ -20,12 +20,12 @@
 
 ```bash
 # 起官方标准 API —— 评测日生产配置（2026-08-11 定稿，全部参数显式写出）
-# T1 = 6成员概率集成（长记录门控只用前5）+ 短文件限额 + SNR闸
+# T1 = 7成员概率集成（长记录门控只用前5）+ 短文件限额 + SNR闸
 #      + 条件式强制成对（纯噪声条目免疫）+ 长记录去重
-# 三分布盲测: 去年r1 1.781 / 去年r2 1.805 / 去年决赛08 2.008（每文件满分2）
+# 三分布盲测: 去年r1 1.786 / 去年r2 1.810 / 去年决赛08 2.010（每文件满分2）
 pip install fastapi uvicorn python-multipart requests
 python scripts/serve_api.py --port 8000 \
-  --weights "guangxi,jiangxi,shandong,weights/aug/exam_aug6_r2train_sd.pt,weights/aug/crew_sp23_r2train_sd.pt,weights/geofon/geofon_m1_last_sd.pt" \
+  --weights "guangxi,jiangxi,shandong,weights/aug/exam_aug6_r2train_sd.pt,weights/aug/crew_sp23_r2train_sd.pt,weights/geofon/geofon_m1_last_sd.pt,weights/geofon/geofon_m3_last_sd.pt" \
   --cap-short-s 300 --cap-max-p 1 --cap-max-s 1 --long-snr-db -1.0 \
   --force-pair-short-s 300 --force-pair-mode conditional \
   --long-dedup-s 20 --ensemble-long-members 5
@@ -42,6 +42,8 @@ python scripts/check_api.py --url http://<公网IP>:8000/pick --input <mseed目�
 
 去年格式的 `.an` 工具链（run_official_task1/23、本地评分）完整保留，
 用于在**去年真题包上离线验证模型分数**——这是唯一可靠的调参依据。
+七成员的有序权重、SHA-256、三分布成绩和证据文件哈希见
+`experiments/t1_g7_release_20260811.json`。
 训练与提分排期见 `训练与提分计划.md`。
 
 ## 🚀 性能（极限优化，输出与优化前逐字段一致）
@@ -86,8 +88,8 @@ GPU>50% 提速，setup.sh 已固定）→ `--overlap` 从 0.5 下调（窗口数
 ```bash
 # 1) 拉回整个仓库（含代码 + 权重备份，总共几 MB，秒级）
 cd /data/coding
-git clone https://gitee.com/你的用户名/你的仓库名.git
-cd 你的仓库名
+git clone https://github.com/ixijxjgxidj-cmd/dizheng-gpt5.6-sol.git dizheng
+cd dizheng
 
 # 2) 一键装环境 + 恢复权重 + GPU 自检（几分钟）
 bash scripts/setup.sh
@@ -126,7 +128,8 @@ python scripts/closed_loop.py
 
 - **网络**：国内免费机跨境下载数据集极慢且关机不留。因此不下大数据集，
   用合成数据验证链路；预训练权重包（diting/stead，各约 1MB）备份进仓库。
-- **持久化**：GPU 机器上一切关机即毁。唯一可信副本 = 本地 + Gitee 仓库。
+- **持久化**：GPU 机器上一切关机即毁。代码与小型生产权重的可信副本 = 本地 + GitHub；
+  208MB SeismicXM 编码器按 SHA-256 校验后通过 SSH/发布资产单独分发。
   训练产物（checkpoint）需实时外送（见 `src/phasepicker/training/checkpoint.py`）。
 - **时间对齐**：模型输出采样点下标，换算绝对到时的逻辑集中在
   `src/phasepicker/utils/timing.py`，有专门测试守护（最易"整盘皆输"处）。
