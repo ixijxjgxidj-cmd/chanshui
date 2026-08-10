@@ -2,7 +2,7 @@
 
 - 日期：2026-08-11
 - 轮次：04
-- 状态：**预注册已冻结；尚未实现、尚未运行阈值评分**
+- 状态：**实验已完成；`development_pass=false`；拒绝进入生产**
 - 基准分支：`main`
 - 基准提交：`fb4345e4d3cfbeda55a8f8da74d719b1499220d1`
 - 生产代码提交仍为：`53117b9d5912578c93d90e0a53774d66d0286aef`
@@ -271,7 +271,7 @@ tau_common = min(tau_selected_from_R2, tau_selected_from_08)
 
 ## 11. 结果输出与可复现性
 
-计划实现：
+实际实现：
 
 - `scripts/experiment_t1_long_event_confidence.py`
 - `tests/test_t1_long_event_confidence.py`
@@ -350,6 +350,7 @@ JSON 至少记录：
 - 结果文件：`outputs/experiments/round04_t1_long_event_confidence.json`（ignored）
 - 结果 SHA-256：`dc55ae264e8ff830eafdd809e7d12b0c4bd3dc2608a2d427cc7cd753e17f5b9d`
 - 结果大小：`2213081` 字节
+- 实验实现与否证提交：`90ff84f887404f87bb81c2a79526accf0e9e7fe4`
 - 随机种子记录：`20260811`；算法本身无随机分支
 - 实际运行命令（本地绝对路径省略）：
 
