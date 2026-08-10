@@ -35,6 +35,10 @@ captured/
 *.csv
 /content/ethz_100hz_subset.hdf5
 
+# 可复现实验总账需要版本控制；仅放行 memory 下的摘要 CSV，不放行原始数据。
+!memory/
+!memory/**/*.csv
+
 # SeismicXM 预训练权重（2GB，Google Drive 下载，见 memory/训练脚本注释）
 weights/seismicxm/
 

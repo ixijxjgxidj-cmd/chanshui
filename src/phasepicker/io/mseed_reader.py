@@ -173,6 +173,8 @@ def build_waveform(
     traces: List["Trace"],
     station: str,
     result: IngestResult,
+    *,
+    min_duration_s: float = MIN_DURATION_S,
 ) -> Optional[Waveform]:
     """把某台站的一组 Trace 组装成统一的三分量 Waveform，带完整校验。
 
@@ -272,11 +274,16 @@ def build_waveform(
         axis=0,
     )  # (3, n) = [Z, N, E]
 
-    # 6) 时长边界校验（超短拒绝；超长仅告警，annotate 原生滑窗可处理）
+    # 6) 时长边界校验。T1 PhaseNet 默认拒绝 <5s；T2/T3 SeismicXM 的固定窗
+    #    预处理会对短输入补齐，因此 API 可显式传 min_duration_s=0 保留短事件。
+    #    不能把 T1 的上下文下限误施加到所有任务：第1轮官方 T3 含 1.5~3.5s
+    #    的合法 OTHER 类样本，旧共用摄入器会把其中 6 条直接变成空响应。
     duration = n / sampling_rate
-    if duration < MIN_DURATION_S:
+    if min_duration_s < 0:
+        raise ValueError(f"min_duration_s 必须 >= 0，收到 {min_duration_s}")
+    if duration < min_duration_s:
         result.add_warning(
-            station, "too_short", f"{duration:.2f}s < {MIN_DURATION_S}s"
+            station, "too_short", f"{duration:.2f}s < {min_duration_s}s"
         )
         return None
     if duration > MAX_DURATION_S:
@@ -294,7 +301,11 @@ def build_waveform(
     )
 
 
-def load_waveforms(raw: bytes) -> IngestResult:
+def load_waveforms(
+    raw: bytes,
+    *,
+    min_duration_s: float = MIN_DURATION_S,
+) -> IngestResult:
     """顶层入口：原始 mseed 字节 → 校验过的多台站 Waveform 列表。
 
     绝不抛出未捕获异常（除非 ObsPy 缺失，那是部署问题应尽早暴露）。
@@ -314,7 +325,9 @@ def load_waveforms(raw: bytes) -> IngestResult:
 
     for station, traces in groups.items():
         try:
-            wf = build_waveform(traces, station, result)
+            wf = build_waveform(
+                traces, station, result, min_duration_s=min_duration_s
+            )
             if wf is not None:
                 result.waveforms.append(wf)
         except Exception as exc:  # noqa: BLE001 —— 最后一道防线，绝不让单台站拖垮整体

@@ -357,6 +357,24 @@ def test_full_three_component_unchanged():
     ), "三分量齐全不该出现任何降级告警"
 
 
+def test_short_waveform_default_rejected_but_padding_model_can_opt_in():
+    from phasepicker.io.mseed_reader import IngestResult, build_waveform
+
+    traces = [_mk_trace(comp, n=200, sr=100.0) for comp in ("Z", "N", "E")]
+
+    default_result = IngestResult()
+    assert build_waveform(traces, "XB.TST", default_result) is None
+    assert any(w.reason == "too_short" for w in default_result.warnings)
+
+    padding_result = IngestResult()
+    wf = build_waveform(
+        traces, "XB.TST", padding_result, min_duration_s=0.0
+    )
+    assert wf is not None
+    assert wf.duration == pytest.approx(2.0)
+    assert not any(w.reason == "too_short" for w in padding_result.warnings)
+
+
 def test_degraded_waveform_flows_through_picker():
     # 端到端衔接: 零填充降级出的 Waveform 能被 pick() 正常消化并出 picks
     wf, _ = _build([_mk_trace("Z", n=3000)])

@@ -304,13 +304,16 @@ class Engine:
         from phasepicker.io.mseed_reader import load_waveforms
         from phasepicker.magnitude import MagnitudeInput
 
-        result = load_waveforms(raw)
+        # 无拾取回归头（SeismicXM/手工特征）会自行补齐短窗；依赖 PhaseNet
+        # picks 的估计器仍保留 T1 同款 5s 下限。
+        needs_picks = getattr(self._mag, "needs_picks", True)
+        result = load_waveforms(raw, min_duration_s=0.0) if not needs_picks else load_waveforms(raw)
         waveforms = result.waveforms
         if not waveforms:
             return {}
 
         with self._lock:
-            if getattr(self._mag, "needs_picks", True):
+            if needs_picks:
                 picks_per_wf = self._pick_all(waveforms)
             else:
                 picks_per_wf = [[] for _ in waveforms]
@@ -324,13 +327,16 @@ class Engine:
         from phasepicker.io.mseed_reader import load_waveforms
         from phasepicker.magnitude import MagnitudeInput
 
-        result = load_waveforms(raw)
+        # SeismicXM/手工特征分类头会把短输入补到固定窗。官方第1轮 T3 有
+        # 1.5~3.5s 合法 OTHER 样本；依赖 picks 的分类器仍保留 5s 下限。
+        needs_picks = getattr(self._cls, "needs_picks", True)
+        result = load_waveforms(raw, min_duration_s=0.0) if not needs_picks else load_waveforms(raw)
         waveforms = result.waveforms
         if not waveforms:
             return {}
 
         with self._lock:
-            if getattr(self._cls, "needs_picks", True):
+            if needs_picks:
                 picks_per_wf = self._pick_all(waveforms)
             else:
                 picks_per_wf = [[] for _ in waveforms]

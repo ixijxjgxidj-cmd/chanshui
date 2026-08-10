@@ -69,8 +69,9 @@
     },
     "known_answer_package_sha256": {
       "round2_r2exam.zip": "d5ffc69223ab75815618e7647e4212d39e4c0e756a91c1e6ee04cb55c29f54e6",
-      "round1": null,
-      "final08": null
+      "round1": "beb93b7544718c3b05be9cd5f4f3cbf78f7be8a32c125a696adeb87c5d3a524e",
+      "final08_exam": "560145f74f2d8861bb344a7396c15793a54f0ce3f4ad056dfa115cd7f756bb3b",
+      "final08_answers": "a7978b61915313509a64d7b91e5609f86a55a7a3ce4b393c22780be9c7088b95"
     },
     "note": "Prediction files are intentionally ignored by Git; their hashes preserve the exact evidence identity. Round1/final08 source-package hashes were not retained in this repository."
   },
@@ -100,7 +101,7 @@
     },
     "weights/official_r1_to_r2/t3_seismicxm_r1r2.joblib": {
       "sha256": "75f5ed29d7995651f53798bbdbdfe06110257cdad11b376b1169971090e8cdbb",
-      "validation": "TTA+cosine kNN(k=5); round1-to-round2 two-class accuracy 98.94%; final08 five-class accuracy 183/205=89.3%"
+      "validation": "TTA+cosine kNN(k=5); round1-to-round2 matched-set accuracy 98.94%; final08 accuracy 183/205=89.3%, but the available final08 answers contain labels 1-4 only"
     }
   },
   "external_assets": {

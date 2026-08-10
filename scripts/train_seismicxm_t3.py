@@ -2,7 +2,7 @@
 """训练 T3 SeismicXM 深度特征分类器并产出可部署 joblib.
 
 产出两个包（都含 sklearn Pipeline + 元数据）：
-  - t3_seismicxm_r1.joblib   ：仅第1轮训练——用于诚实验收（第2轮盲测应≈98.9%）；
+  - t3_seismicxm_r1.joblib   ：仅第1轮训练——用于跨轮验收（第2轮匹配集应≈98.9%）；
   - t3_seismicxm_r1r2.joblib ：两轮合训——部署默认（数据最大化）。
 
 特征优先读 scripts/seismicxm_t3_features.py 的缓存（outputs/seismicxm_t3/

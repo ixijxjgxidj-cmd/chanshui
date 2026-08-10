@@ -6,6 +6,7 @@
 
 import os
 import sys
+import io
 
 import pytest
 
@@ -112,6 +113,43 @@ def test_real_t3_model_loads_and_predicts_int():
                   sampling_rate=100.0, starttime_utc=0.0, station="XB.TST")
     out = est.estimate(MagnitudeInput(waveforms=[wf], picks_per_wf=[[]]))
     assert len(out) == 1 and len(out[0]) == 1 and out[0][0] in {1, 2, 3, 4, 5}
+
+
+def test_classify_keeps_sub_five_second_waveform_while_pick_guard_stays():
+    """T2/T3 可补齐短窗；T1 的 5s PhaseNet 防线保持不变。"""
+    obspy = pytest.importorskip("obspy")
+    np = pytest.importorskip("numpy")
+
+    stream = obspy.Stream()
+    for comp in ("Z", "N", "E"):
+        tr = obspy.Trace(data=np.ones(200, dtype=np.float32))
+        tr.stats.network = "XB"
+        tr.stats.station = "TST"
+        tr.stats.channel = f"HH{comp}"
+        tr.stats.sampling_rate = 100.0
+        tr.stats.starttime = obspy.UTCDateTime(0)
+        stream += tr
+    buffer = io.BytesIO()
+    stream.write(buffer, format="MSEED")
+
+    class NeverUsedPicker:
+        def pick(self, _waveform):
+            raise AssertionError("短 T1 应在 picker 前被拒绝")
+
+    class ShortWindowClassifier:
+        needs_picks = False
+
+        def estimate(self, inp):
+            assert len(inp.waveforms) == 1
+            assert inp.waveforms[0].duration == pytest.approx(2.0)
+            return [[5]]
+
+    engine = serve_api.Engine(
+        NeverUsedPicker(), cls_estimator=ShortWindowClassifier()
+    )
+    raw = buffer.getvalue()
+    assert engine.process_mseed_bytes(raw) == {}
+    assert engine.process_mseed_bytes_classify(raw) == {"TST": 5}
 
 
 if __name__ == "__main__":
