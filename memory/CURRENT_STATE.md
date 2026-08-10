@@ -84,11 +84,15 @@ T1 冻结结果同时报告四种数量罚解释：
 
 统一摄入器原先对所有任务拒绝 `<5s` 波形。第 1 轮官方 T3 实际有 6 个 1.5–3.5 秒的合法第 5 类样本；生产 SeismicXM 离线对六条均分类正确，但旧 API 在模型前返回空表。提交 `53117b9` 已将 5 秒下限保留给 T1/依赖 picks 的模型，对 `needs_picks=False` 的 T2/T3 固定窗模型允许短窗。六个官方文件端到端恢复为类别 5；第 1 轮有效 T3 accuracy 从旧 API 的 91.0% 恢复为 94.0%，第 5 类 recall 从 40% 恢复为 100%。服务器 2 秒隔离烟测和公网健康检查均已通过。
 
-### 2. 缺口屏蔽未接通
+### 2. 第 5 轮最终列表缺口屏蔽已否证，生产仍未接通 gap 规则
 
-`mseed_reader.py` 会检测分量缺口、用 0 填充并写入 `Waveform.gaps`，且注释明确说缺口内拾取必须否决；当前 `picker.py` 未使用 `Waveform.gaps`。这可能在零填充边缘或区间内制造假拾取。先量化历史包缺口率及当前预测命中情况，再决定是否上线屏蔽规则。
+历史三包 3,894 个已画像文件没有真实 gap，因此本轮只验证未来输入鲁棒性，不能声称历史官方分数提升。读取层仍会记录 `Waveform.gaps` 并零填充，但生产 `picker.py` 没有消费该元数据；这次没有因实验失败而改默认路径。
 
-历史三包完整波形画像显示 T1 gap 文件为 0，因此这个不一致当前是未来鲁棒性问题，不是现有历史分数的直接增益来源。
+第 5 轮同时用 AnySearch 与 Playwright 核验 17 篇与零填充边界、prediction inconsistency、gap augmentation、缺失数据重建和下游偏差直接相关的研究，并预注册最终 `Pick` 列表固定 margin mask。七成员、输入包/权重身份、注入逐位一致、无 gap 对象身份、single/batch、重复性和 P95 `2.1463 ms` 均通过。
+
+但 R1/R2/固定噪声共 77 个变体产生 `31` 个 induced 和 `36` 个 lost，其中 `13` 个 induced、`2` 个 lost 位于物理 gap 10 秒之外。`margin=0` 只清掉 8/31 个 induced；`margin=10s` 仍留下全部 13 个远程 induced，并误删 37 个稳定 reference picks。没有 active margin，08 波形推理被锁住，`development_pass=false`。
+
+稳定结论：零填充会改变更宽上下文内的概率或条件式 force-pair 结果，所有后处理完成后的删除层无法修复。不得扩大 margin、按文件/相位自适应或把 taper/interpolation 当作同轮补救。若继续研究 gap，作用点必须前移到 annotation/正常阈值/force-pair 之前，并另行预注册；完整证据见 `memory/experiments/005-t1-gap-mask-robustness.md`。
 
 ### 3. T3 中心化/等类轻量头在跨包验证中崩落（已拒绝）
 
@@ -128,7 +132,7 @@ OFF 路径已逐文件和四种完整包口径复现到 `1e-9`。R2 tau 0.35/0.4
 
 ## 下一步顺序
 
-1. gap 历史包计数为 0，作为下一项鲁棒性候选；先做合成缺口最小反证，要求无缺口输出逐位不变，再决定是否接通 `Waveform.gaps` 屏蔽。
+1. 基于第 5 轮远程副作用，独立评估 annotation/正常阈值/force-pair 前的 gap awareness；先用现有 raw annotation 能力做最小反证，不做插值或训练，不使用 08 回选。
 2. 为 watchdog 增加只允许环回探针使用的“不采集”机制与不可由公网伪造的边界测试；完成前继续不安装 cron。
 3. 最终冻结前执行真正的回滚再前滚演练、统一复评和公网复验，并为服务器补齐 GitHub 私有仓库只读发布路径。
 4. T2 暂不继续 source-only residual、quantile/Huber、双模型平均或相同幅值拼接；只有无标签目标批次、解释偏移的元数据、DiTing/目标区标签或新的独立包出现时重开。

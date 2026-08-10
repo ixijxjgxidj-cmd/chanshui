@@ -81,3 +81,12 @@
 - 理由：旧脚本会在缺 encoder 时继续启动 baseline，容易把“服务可用”误当成“生产模型已就绪”；静态默认值与资产哈希联合校验可以在重启前发现配置漂移和错误文件。
 - 隐私边界：manifest、文档和模型元数据不得保留服务器、账号、代理、私钥或比赛数据机器绝对路径。历史 checkpoint/joblib 只清洗元数据，必须验证张量或预测不变。
 - 部署边界：本轮没有改变生产推理输出，稳定服务器不因发布工具和文档硬化而重启；新闸门在下一次正向发布时生效。
+
+## 2026-08-11：拒绝最终 Pick 列表固定 margin 缺口屏蔽
+
+- 决策：不在所有阈值、条件式 force-pair、SNR 与 dedup 完成后按 `Waveform.gaps` 固定区间删除最终 picks；margin `0/0.5/1/2/5/10s` 全部拒绝，不改 `PickerConfig`、API、manifest 或部署。
+- 实现可信度：7 成员、三包与权重哈希、77/77 注入身份、无 gap 对象身份、single/batch、重复性全部通过；10,000 picks/100 gaps/500 次 P95 `2.1463 ms`。拒绝原因不是代码或性能。
+- 数据证据：77 个开发变体产生 31 个 induced、36 个 lost；13 个 induced 和 2 个 lost 距物理 gap 超过 10 秒。`margin=0` 残留 23 个 induced；`margin=10s` 仍残留全部 13 个远程 induced，并 collateral delete 37 个稳定 reference picks。
+- 防终检泄漏：开发没有 active margin，因此没有运行 08 波形推理；ignored JSON 中 `holdout08.records=null`。
+- 解释：gap 已在更上游改变概率、阈值峰或 force-pair 上下文，最终删除层不能恢复远程丢失，也不能删除远程诱发。不得扩大 margin、自适应选窗或在同轮改成 taper/interpolation。
+- 重开边界：只允许把作用点前移到 annotation/正常阈值/force-pair 之前，重新检索新论文并独立预注册；若 gap 10 秒外 probability/final picks 仍变化则同样拒绝。
