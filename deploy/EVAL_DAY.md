@@ -1,7 +1,8 @@
 # 评测日 Runbook（U13）
 
-开放窗口约 1 天，任何小时级的服务半死都是该时段样本全丢。本文假设服务器上仓库在
-`/root/dizheng`（下文记 `$REPO`），服务为 systemd 单元 `phasepick-api`，端口 8000。
+开放窗口约 1 天，任何小时级的服务半死都是该时段样本全丢。当前生产服务器仓库在
+`/home/hulkcheng0806/dizheng`（下文记 `$REPO`），服务为 systemd 单元
+`phasepick-api`，端口 8000。
 
 速查：
 
@@ -13,11 +14,10 @@ sudo bash $REPO/deploy/deploy_api.sh                  # 一键重部（幂等）
 bash $REPO/deploy/watchdog.sh                         # 手动跑一次真实请求探活
 ```
 
-> **本文默认宿主是 systemd + `/root/dizheng` + `http://<公网IP>:8000`。当前实际部署是
-> FunHPC 容器：仓库在 `/data/dizheng`、无 systemd（走 nohup 守护循环）、外网是平台
-> HTTPS 代理 `https://<host>:<映射端口>` → 容器 8000。下文凡 `systemctl` 开头的命令，
-> 在该机器上一律走 §4 表里的 nohup 分支；`watchdog.sh` / `deploy_api.sh` 本身已内置
-> 两条分支的自动判别，不用改。**
+> **2026-08-11 当前实际部署：Debian 13 云主机 + systemd，仓库路径如上，服务以
+> `hulkcheng0806` 普通用户运行；服务器本机的 T1/T2/T3 与 300 请求 soak 已全绿。
+> 公网地址为 `http://136.110.4.28:8000`，但云安全组 TCP 8000 尚待放行，放行后必须
+> 立即从非服务器机器完成本节的外网复测。**
 
 ---
 

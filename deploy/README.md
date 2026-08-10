@@ -16,6 +16,12 @@ cd dizheng
 sudo bash deploy/deploy_api.sh
 ```
 
+仓库当前是 GitHub 私有仓库。全新服务器直接执行上面的 HTTPS clone 前，需要先配置
+GitHub 只读 deploy key（推荐）或其他 GitHub 凭据；没有凭据时可由可信机器生成
+`git bundle` 后离线传入。不要把 PAT 写进 remote URL 或部署文档。部署脚本用 sudo
+执行安装，但 systemd 服务默认以 `SUDO_USER`（即发起 sudo 的普通用户）运行；必要时可用
+`SERVICE_USER` / `SERVICE_GROUP` / `SERVICE_HOME` 显式覆盖。
+
 脚本默认使用 2026-08-11 七成员生产顺序，长记录只取前五成员，并显式启用
 300s 短记录限额、−1dB 长记录 SNR 闸、条件式强制成对和 20s 长记录去重。
 
@@ -24,7 +30,7 @@ CPU 轮子）→ 从 `weights/*.tar.gz` 恢复 seisbench 权重缓存（**不走
 装 systemd 服务（开机自启 + 崩溃自拉起 + 内存护栏）→ 健康检查（最长 180s，
 慢云机首启加载权重较久）→ 合成波形跑 `check_api.py` 官方格式自检。
 
-完成后**必须手工做**的三件事：
+完成后**必须手工做**的四件事：
 
 1. 云控制台安全组放行 **TCP 8000**；
 2. 从外网机器复测后，把 `http://<公网IP>:8000/pick` 登记到比赛平台；

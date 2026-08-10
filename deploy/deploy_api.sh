@@ -25,6 +25,9 @@
 #                              #  并以 --device cuda 启动（fp16 仍默认关，须同分验证后才开）
 #   CAPTURE_DIR=<仓库>/captured # 评测请求采集目录（原始波形+响应落盘，复赛间微调的
 #                              #  数据来源）。传 CAPTURE_DIR=off 关闭
+#   SERVICE_USER=<用户名>       # systemd 运行用户；sudo 执行时默认取 SUDO_USER（不以 root 跑）
+#   SERVICE_GROUP=<组名>        # 默认取 SERVICE_USER 的主组
+#   SERVICE_HOME=<目录>         # 默认取 passwd 中的用户 home，并写入 systemd 的 HOME
 #
 # 依赖版本锁定在 deploy/requirements.lock（本地彩排验证过的精确版本）；
 # 要求 python >= 3.12（Ubuntu 24.04 自带；老镜像先装 python3.12 再 PYTHON_BIN 指定）。
@@ -67,6 +70,9 @@ THREADS="${THREADS:-2}"
 export OMP_NUM_THREADS="$THREADS"
 DEVICE="${DEVICE:-cpu}"
 CAPTURE_DIR="${CAPTURE_DIR:-}"
+SERVICE_USER="${SERVICE_USER:-}"
+SERVICE_GROUP="${SERVICE_GROUP:-}"
+SERVICE_HOME="${SERVICE_HOME:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -189,6 +195,43 @@ for pf in "$SUP_PID_FILE" "$API_PID_FILE"; do
 done
 
 if command -v systemctl >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
+  # sudo 部署时，安装动作需要 root，但常驻推理服务不应继承 root 权限。优先使用
+  # sudo 的原始调用者；若脚本由 root 直接运行，则尝试仓库所有者，最后才回退 root。
+  if [ -z "$SERVICE_USER" ]; then
+    SERVICE_USER="${SUDO_USER:-}"
+  fi
+  if [ -z "$SERVICE_USER" ] || [ "$SERVICE_USER" = "root" ]; then
+    REPO_OWNER="$(stat -c '%U' "$REPO_ROOT" 2>/dev/null || true)"
+    if [ -n "$REPO_OWNER" ] && [ "$REPO_OWNER" != "root" ]; then
+      SERVICE_USER="$REPO_OWNER"
+    else
+      SERVICE_USER="root"
+    fi
+  fi
+  if ! id "$SERVICE_USER" >/dev/null 2>&1; then
+    echo "!! systemd 运行用户不存在: $SERVICE_USER（可用 SERVICE_USER=<用户名> 覆盖）"
+    exit 1
+  fi
+  [ -n "$SERVICE_GROUP" ] || SERVICE_GROUP="$(id -gn "$SERVICE_USER")"
+  if ! getent group "$SERVICE_GROUP" >/dev/null 2>&1; then
+    echo "!! systemd 运行组不存在: $SERVICE_GROUP（可用 SERVICE_GROUP=<组名> 覆盖）"
+    exit 1
+  fi
+  if [ -z "$SERVICE_HOME" ]; then
+    SERVICE_HOME="$(getent passwd "$SERVICE_USER" | cut -d: -f6)"
+  fi
+  [ -n "$SERVICE_HOME" ] || SERVICE_HOME="$REPO_ROOT"
+  if [ ! -d "$SERVICE_HOME" ]; then
+    echo "!! systemd 运行用户 HOME 不存在: $SERVICE_HOME（可用 SERVICE_HOME=<目录> 覆盖）"
+    exit 1
+  fi
+
+  # 服务需要写 SeisBench 缓存和请求采集目录；其余仓库内容保持只读即可。
+  chown -R "$SERVICE_USER:$SERVICE_GROUP" "$CACHE"
+  if [ "$CAPTURE_DIR" != "off" ]; then
+    chown -R "$SERVICE_USER:$SERVICE_GROUP" "$CAPTURE_DIR"
+  fi
+
   cat > /etc/systemd/system/phasepick-api.service <<UNIT
 [Unit]
 Description=PhasePick official API (zhenzhibei)
@@ -196,7 +239,10 @@ After=network.target
 
 [Service]
 Type=simple
+User=$SERVICE_USER
+Group=$SERVICE_GROUP
 WorkingDirectory=$REPO_ROOT
+Environment=HOME=$SERVICE_HOME
 Environment=SEISBENCH_CACHE_ROOT=$CACHE
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONUTF8=1
@@ -218,7 +264,7 @@ UNIT
   systemctl daemon-reload
   systemctl enable phasepick-api >/dev/null 2>&1
   systemctl restart phasepick-api
-  echo "systemd 服务已启动（开机自启 + 崩溃自拉起 + 内存护栏 60%/75%）"
+  echo "systemd 服务已启动（用户 $SERVICE_USER:$SERVICE_GROUP；开机自启 + 崩溃自拉起 + 内存护栏 60%/75%）"
 else
   echo "无 systemd/非 root：用 nohup 守护循环兜底（评测日强烈建议用 root+systemd 路径）"
   SUP_SH="$REPO_ROOT/serve_api_supervisor.sh"

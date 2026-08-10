@@ -4,6 +4,8 @@ __pycache__/
 *.pyo
 .pytest_cache/
 *.egg-info/
+.venv/
+.seisbench_cache/
 
 # 数据与运行产物（大文件不进仓库）
 runs/
