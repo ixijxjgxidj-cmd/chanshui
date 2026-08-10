@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "release_id": "production-g7-seismicxm-20260811",
+  "status": "deployed_and_verified",
+  "repository": {
+    "url": "https://github.com/ixijxjgxidj-cmd/dizheng-gpt5.6-sol.git",
+    "branch": "main",
+    "validated_code_commit": "53117b9d5912578c93d90e0a53774d66d0286aef",
+    "deployment_record_commit": "c08bda58bad856fa1bd24f8975385696dbad11bc",
+    "rollback_commit": "47fb72c655896913c656c0765acde57bd334c3a4"
+  },
+  "production_config": {
+    "pretrained": "diting",
+    "weights_cli": "guangxi,jiangxi,shandong,weights/aug/exam_aug6_r2train_sd.pt,weights/aug/crew_sp23_r2train_sd.pt,weights/geofon/geofon_m1_last_sd.pt,weights/geofon/geofon_m3_last_sd.pt",
+    "p_threshold": 0.2,
+    "s_threshold": 0.15,
+    "p_merge_window_s": 1.0,
+    "s_merge_window_s": 3.0,
+    "cap_short_s": 300.0,
+    "cap_max_p": 1,
+    "cap_max_s": 1,
+    "long_snr_db": -1.0,
+    "long_snr_min_s": 300.0,
+    "force_pair_short_s": 300.0,
+    "force_pair_floor": 0.03,
+    "force_pair_mode": "conditional",
+    "long_dedup_s": 20.0,
+    "ensemble_long_members": 5,
+    "tta_polarity_flip": false,
+    "mag_model": "seismicxm",
+    "cls_model": "seismicxm",
+    "threads": 2,
+    "device": "cpu"
+  },
+  "deployment_policy": {
+    "verify_before_service_restart": true,
+    "require_external_for_default_seismicxm": true,
+    "allow_model_fallback_default": false,
+    "emergency_fallback_environment": "ALLOW_MODEL_FALLBACK=1",
+    "reject_present_but_invalid_external_asset": true
+  },
+  "assets": {
+    "tracked": [
+      {
+        "path": "deploy/requirements.lock",
+        "role": "locked Python deployment dependencies",
+        "size_bytes": 2016,
+        "sha256": "0ca68f94d35c9c4bc7c1056f25433534c142f130485e942bdf5d2f4ecf29bcc6"
+      },
+      {
+        "path": "weights/phasenet_diting_weights.tar.gz",
+        "role": "default SeisBench PhaseNet cache",
+        "size_bytes": 1011537,
+        "sha256": "fa0bc5c82757c67fa9cff699ea81eaf8e826b4a330b57bebbab0deed53098fed"
+      },
+      {
+        "path": "weights/phasenet_stead_weights.tar.gz",
+        "role": "emergency PhaseNet fallback cache",
+        "size_bytes": 1013928,
+        "sha256": "af8ec69a71340e047adb1d208da9c1153c3c6f6f2fd1b46557b0c157777a0869"
+      },
+      {
+        "path": "weights/ustc_pickers/guangxi_sd.pt",
+        "role": "T1 ensemble member 1 (CLI alias guangxi)",
+        "size_bytes": 1113344,
+        "sha256": "a085027434b6b7c176b690b5905e858f12d882796c4f336544ccbf0da853086d"
+      },
+      {
+        "path": "weights/ustc_pickers/jiangxi_sd.pt",
+        "role": "T1 ensemble member 2 (CLI alias jiangxi)",
+        "size_bytes": 1113344,
+        "sha256": "166f94b180db775cc20e65b9afea03f263ab693354f569a019b83fa08256010a"
+      },
+      {
+        "path": "weights/ustc_pickers/shandong_sd.pt",
+        "role": "T1 ensemble member 3 (CLI alias shandong)",
+        "size_bytes": 1113461,
+        "sha256": "5c959f8872bb5cef12af3bb908feb5140399bc281fd1361995453b66841fdf3c"
+      },
+      {
+        "path": "weights/aug/exam_aug6_r2train_sd.pt",
+        "role": "T1 ensemble member 4",
+        "size_bytes": 1114514,
+        "sha256": "ba68e50bf6b18ae54072814ba1ed5f0b94a6cb08b890055f3155b88f89106250"
+      },
+      {
+        "path": "weights/aug/crew_sp23_r2train_sd.pt",
+        "role": "T1 ensemble member 5",
+        "size_bytes": 1114514,
+        "sha256": "8ecb8dacd0da4d0d365da906bd20454e2ba1a9943d0635a21051e6d8e98725b0"
+      },
+      {
+        "path": "weights/geofon/geofon_m1_last_sd.pt",
+        "role": "T1 ensemble member 6 (short records only)",
+        "size_bytes": 1114163,
+        "sha256": "05df8fd213cdc8e2b8e5b3d3b66f6f8436e7009d6dd011560cbb7f149e7a8c14"
+      },
+      {
+        "path": "weights/geofon/geofon_m3_last_sd.pt",
+        "role": "T1 ensemble member 7 (short records only)",
+        "size_bytes": 1114163,
+        "sha256": "822398ac041f3f523697f56fbf9a79499ba978751848027ffcb74244323674ba"
+      },
+      {
+        "path": "weights/official_r1_to_r2/t2_seismicxm_r1r2.joblib",
+        "role": "production T2 SeismicXM deep-feature Ridge",
+        "size_bytes": 30021,
+        "sha256": "41f4ab9f67daa98889fd921a22d33b750d58c137efe81b850e3ac2329d16d5e1"
+      },
+      {
+        "path": "weights/official_r1_to_r2/t3_seismicxm_r1r2.joblib",
+        "role": "production T3 SeismicXM TTA cosine kNN",
+        "size_bytes": 1597768,
+        "sha256": "75f5ed29d7995651f53798bbdbdfe06110257cdad11b376b1169971090e8cdbb"
+      },
+      {
+        "path": "weights/official_r1_to_r2/t2_magnitude_baseline.joblib",
+        "role": "T2 explicit fallback",
+        "size_bytes": 1473223,
+        "sha256": "a8a9407a41d16daef39e384e8f0685bc6c004349a218b987d8dd2ca3d5b54ca1"
+      },
+      {
+        "path": "weights/official_r1_to_r2/t3_event_baseline.joblib",
+        "role": "T3 explicit fallback",
+        "size_bytes": 1954146,
+        "sha256": "a8fc1168015cbd957bc8dec41ed48894a6155997580470b52b2b4e724ed24daa"
+      }
+    ],
+    "external": [
+      {
+        "path": "weights/seismicxm/seismicxm.middle.pt",
+        "role": "shared SeismicXM middle encoder for production T2/T3",
+        "required_by_default": true,
+        "size_bytes": 207709060,
+        "sha256": "671d02d677c25c3d075963889602299ec71f52c724470f2fa85bb28035fe1528",
+        "distribution": "copy from an authorized release source; verify SHA-256 before service restart"
+      }
+    ]
+  },
+  "validation": {
+    "frozen_baseline": {
+      "path": "outputs/frozen_baseline/baseline_full_profile_prod_20260811.json",
+      "sha256": "2a55e4164db40a8eb87d6aa518fb040f11f7b2996788234f8fc1513bcfa3ac05",
+      "tracked_by_git": false
+    },
+    "t1_mean_score_merged_file_floor0": {
+      "round1": 1.7862944444,
+      "round2": 1.8101396478,
+      "final08": 2.0100836168,
+      "blind_test": false
+    },
+    "t2_final08": {
+      "mae": 0.523197455,
+      "mean_signed_error": 0.099781905,
+      "blind_test": false
+    },
+    "t3_final08": {
+      "correct": 183,
+      "total": 205,
+      "accuracy": 0.8926829268,
+      "observed_labels": [1, 2, 3, 4],
+      "blind_test": false
+    },
+    "api_acceptance": {
+      "endpoints": ["/health", "/pick", "/magnitude", "/classify"],
+      "http_200_local_and_external": true,
+      "pick_soak_requests": 300,
+      "pick_latency_mean_ms": 42.17,
+      "pick_latency_p95_ms": 44.91,
+      "rss_growth_mib_approx": 4
+    },
+    "artifact_metadata_hardening": {
+      "production_inference_defaults_changed": false,
+      "archived_torch_checkpoints_sanitized": 2,
+      "tensors_verified_equal_per_checkpoint": 174,
+      "baseline_fallback_joblibs_sanitized": 2,
+      "joblib_probe_predictions_equal": true
+    }
+  }
+}

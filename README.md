@@ -6,7 +6,10 @@
 
 ---
 
-## ⚡ 2026 官方标准（第二届"震智杯"，以《比赛说明》PPT 为准）
+## ⚡ 2026 官方标准（第二届“震智杯”）
+
+规则证据以 `memory/rule-evidence.md` 为准；PPT、官网与官方群回复冲突时，采用较新的
+官方群明确回复。历史比赛包只用于冻结回放，不能替代今年官方输入契约。
 
 **提交方式已从"上传 .an 文件"改为"公网 HTTP API"**：
 
@@ -14,7 +17,11 @@
 - 响应必须是 JSON：`{"台站名": {"P": ["2025-06-07T12:34:56.789000Z", ...], "S": [...]}}`
   （绝对 UTC 到时，微秒 6 位 + `Z` 后缀）；
 - 评分：P ≤0.1s 得 1 分、0.1–1s 线性、>1s 不计分；S ≤0.2s 满分 / 0.2–2s 线性；
-  数量误差 >5% 每超 1 个扣 0.5 分；单项最低 0 分。输入 100Hz、无位置信息、含纯噪声条目。
+  数量误差 >5% 每超 1 个扣 0.5 分；单项最低 0 分；
+- 输入是三分量 MiniSEED，记录时长和采样率不能假定固定；每条可含多个 P/S，也可完全
+  没有震相。历史包以 100 Hz 为主只是观察，不是今年的固定契约；
+- 官方群确认“不限制加速度记录，以速度记录为主”。生产保留输入原始语义，不自动把
+  加速度积分成速度（该方向已在历史包变体实验中证伪）。
 
 对应入口：
 
@@ -22,7 +29,7 @@
 # 起官方标准 API —— 评测日生产配置（2026-08-11 定稿，全部参数显式写出）
 # T1 = 7成员概率集成（长记录门控只用前5）+ 短文件限额 + SNR闸
 #      + 条件式强制成对（纯噪声条目免疫）+ 长记录去重
-# 三分布盲测: 去年r1 1.786 / 去年r2 1.810 / 去年决赛08 2.010（每文件满分2）
+# 三套历史包冻结回放（答案已知，非盲测）：r1 1.786 / r2 1.810 / 08 2.010
 pip install fastapi uvicorn python-multipart requests
 python scripts/serve_api.py --port 8000 \
   --weights "guangxi,jiangxi,shandong,weights/aug/exam_aug6_r2train_sd.pt,weights/aug/crew_sp23_r2train_sd.pt,weights/geofon/geofon_m1_last_sd.pt,weights/geofon/geofon_m3_last_sd.pt" \
@@ -38,12 +45,17 @@ python scripts/serve_api.py --port 8000                                       # 
 
 # 提交前自检：状态码 / JSON 结构 / ISO 到时格式 / 升序，全对才算过
 python scripts/check_api.py --url http://<公网IP>:8000/pick --input <mseed目录或zip>
+
+# 部署前校验生产默认值、Git 资产与外置 SeismicXM encoder
+python scripts/verify_release_manifest.py --require-external
 ```
 
 去年格式的 `.an` 工具链（run_official_task1/23、本地评分）完整保留，
 用于在**去年真题包上离线验证模型分数**——这是唯一可靠的调参依据。
 七成员的有序权重、SHA-256、三分布成绩和证据文件哈希见
 `experiments/t1_g7_release_20260811.json`。
+T3 的 08 包共 205 条，答案实际只出现标签 1–4，结果为 183/205=89.27%；这不能
+证明第 5 类泛化，也不是盲测。
 训练与提分排期见 `训练与提分计划.md`。
 
 ## 🚀 性能（极限优化，输出与优化前逐字段一致）

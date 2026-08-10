@@ -6,16 +6,16 @@
 
 ## 当前生产部署验收（2026-08-11）
 
-- Debian 13、4 vCPU、6.8 GiB RAM、CPU 推理；仓库位于
-  `/home/hulkcheng0806/dizheng`，由 systemd 单元 `phasepick-api` 开机自启。
-- 服务以普通用户 `hulkcheng0806` 运行；七个 T1 成员、T2/T3 bundle 与
+- Debian 13、4 vCPU、6.8 GiB RAM、CPU 推理；仓库路径和服务账号按目标机器配置，
+  不写入公开仓库；systemd 单元 `phasepick-api` 开机自启。
+- 服务以非 root 普通用户运行；七个 T1 成员、T2/T3 bundle 与
   SeismicXM encoder 共 10 个发布资产均已逐一校验哈希，启动日志没有回退。
 - `/pick`、`/magnitude`、`/classify` 的真实样本以及纯噪声、50 Hz、多台站、
   4000 秒长记录、空文件和损坏文件边界测试均通过。
 - 300 次连续真实 `/pick` 请求全部成功：均值 42.17 ms、P95 44.91 ms、最大
   56.35 ms；RSS 仅增长约 4 MiB，内存泄漏修复在 Linux 上复验通过。
 - 服务已监听 `0.0.0.0:8000`，云平台 TCP 8000 入站规则已生效。从非服务器机器经
-  `http://136.110.4.28:8000` 复测：`/health`、`/pick`、`/magnitude`、`/classify`
+  `http://<公网地址>:8000` 复测：`/health`、`/pick`、`/magnitude`、`/classify`
   均为 HTTP 200，返回值与服务器本机一致；公网耗时分别约 0.16s、0.27s、0.39s、1.03s。
 - 部署侧已无阻塞项。上线前剩余操作是把各任务 URL 登记到比赛平台；评测日 watchdog
   cron 尚未安装，因为当前脚本每次真实 `/pick` 探活都会写入生产 `captured/`，安装前需
@@ -25,9 +25,9 @@
 
 | 组件 | 变化 | 验收成绩 |
 |---|---|---|
-| T1 拾取 | diting → **7成员概率集成（长记录门控前5）+ 短文件限额 + SNR闸 + 条件式强制成对 + 长记录去重**（2026-08-11 定稿） | 三分布盲测 r1 **1.786294** / r2 **1.810140** / 08决赛 **2.010084**（GEOFON m1/m3 为第6/7成员；长记录固定排除） |
+| T1 拾取 | diting → **7成员概率集成（长记录门控前5）+ 短文件限额 + SNR闸 + 条件式强制成对 + 长记录去重**（2026-08-11 定稿） | 三套历史包冻结回放（答案已知，非盲测）：r1 **1.786294** / r2 **1.810140** / 08 **2.010084**（GEOFON m1/m3 为第6/7成员；长记录固定排除） |
 | T2 震级 | joblib 特征树 → **SeismicXM deep1024+Ridge** | MAE 0.817→**0.621** |
-| T3 分类 | joblib 特征树 → **SeismicXM TTA+余弦kNN(k=5)** | r2 两类 81.5%→**98.94%**；08 五类盲测 **89.3%（183/205）** |
+| T3 分类 | joblib 特征树 → **SeismicXM TTA+余弦kNN(k=5)** | r2 两类 81.5%→**98.94%**；08 包答案实际只出现标签 1–4，**183/205=89.27%**（非盲测，不能证明第 5 类泛化） |
 
 2026-08-11 官方群确认的规则情报：
 - 计分规则与本仓 scorer.py 逐条一致；"每文件答案个数不定"确认多相位合法
@@ -55,9 +55,11 @@ overlap 0.75（r2 −2.1）、overlap 0.9（r2 +6.5 但 08 −2.4 三分布不�
 ```bash
 pip install einops           # SeismicXM 唯一新依赖
 git pull
-# 权重就位检查（缺 seismicxm 会自动回退旧 baseline 不报错——要看启动日志！）
+# 权重就位检查
 ls -la weights/seismicxm/seismicxm.middle.pt weights/ustc_pickers/*_sd.pt \
       weights/aug/*_sd.pt weights/official_r1_to_r2/t2_seismicxm_r1r2.joblib
+# 重启前强制核对生产参数、全部跟踪资产和外置 encoder
+python scripts/verify_release_manifest.py --require-external
 # 启动（T1 生产配置 2026-08-11 定稿：7成员集成、长记录仅前5 + 短文件限额 + SNR闸 +
 #       条件式强制成对 + 长记录去重(20s)，三分布 r1 1.786294 / r2 1.810140 / 08 2.010084。
 #       cap/SNR/force-pair/long-dedup 均为 serve_api 默认值，显式写出防误改）
@@ -88,7 +90,8 @@ curl -F "file=@T3.A.Q0001.mseed" http://<外网地址>/classify   # 期望 class
 ## 性能预期与注意
 
 - SeismicXM 51.9M 模型 CPU 上 TTA 分类约 1.2 文件/秒（长波形 5 窗）；容器 GPU 会快一个量级。
-  若评测吞吐紧张，可 `--cls-weights/--mag-weights` 临时切回 baseline（各自独立回退）。
+  若确需应急降级，应显式选择 baseline；`deploy_api.sh` 默认拒绝缺 encoder 的
+  SeismicXM 部署，只有 `ALLOW_MODEL_FALLBACK=1` 才允许缺失时继续。
 - 决策记录：**评测日固定用广西权重，不做临场权重切换**——两个无标签选择信号
   （平均置信度 Spearman 0.08、共识一致度 0.53）均未通过去年数据验证，同源模型
   分差小于无监督代理的分辨率（2026-08-01 实验，见 memory/ustc-guangxi-t1-result）。

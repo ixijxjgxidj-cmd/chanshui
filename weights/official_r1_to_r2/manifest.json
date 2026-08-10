@@ -1,4 +1,5 @@
 {
+  "schema_version": 2,
   "feature_count": 60,
   "feature_names": [
     "Z_log_std",
@@ -62,15 +63,23 @@
     "corr_z_e",
     "corr_n_e"
   ],
-  "train_zips": [
-    "C:\\Users\\hulk cheng\\Desktop\\第1轮比赛试题与答案_1765249163770..zip"
-  ],
-  "eval_zips": [
-    "C:\\Users\\hulk cheng\\Desktop\\第2轮比赛试题与答案_1765249253663..zip"
-  ],
+  "packages": {
+    "round1": {
+      "package_id": "official-round1-1765249163770",
+      "basename": "第1轮比赛试题与答案_1765249163770..zip",
+      "sha256": "beb93b7544718c3b05be9cd5f4f3cbf78f7be8a32c125a696adeb87c5d3a524e"
+    },
+    "round2": {
+      "package_id": "official-round2-1765249253663",
+      "basename": "第2轮比赛试题与答案_1765249253663..zip",
+      "sha256": "d5ffc69223ab75815618e7647e4212d39e4c0e756a91c1e6ee04cb55c29f54e6"
+    }
+  },
+  "training_packages": ["round1"],
+  "evaluation_packages": ["round2"],
   "tasks": {
     "T2": {
-      "model": "C:\\Users\\hulk cheng\\Desktop\\dizheng\\weights\\official_r1_to_r2\\t2_magnitude_baseline.joblib",
+      "model": "weights/official_r1_to_r2/t2_magnitude_baseline.joblib",
       "training": {
         "samples": 200,
         "target_min": 4.0,
@@ -78,13 +87,13 @@
         "target_mean": 4.4639999999999995
       },
       "samples_per_package": {
-        "C:\\Users\\hulk cheng\\Desktop\\第1轮比赛试题与答案_1765249163770..zip": 200
+        "round1": 200
       },
       "training_failures": {
-        "C:\\Users\\hulk cheng\\Desktop\\第1轮比赛试题与答案_1765249163770..zip": []
+        "round1": []
       },
       "evaluation": {
-        "C:\\Users\\hulk cheng\\Desktop\\第2轮比赛试题与答案_1765249253663..zip": {
+        "round2": {
           "model_mae": 0.8166636666666669,
           "model_max_abs_error": 1.7889333333333362,
           "model_count": 200,
@@ -95,7 +104,7 @@
       }
     },
     "T3": {
-      "model": "C:\\Users\\hulk cheng\\Desktop\\dizheng\\weights\\official_r1_to_r2\\t3_event_baseline.joblib",
+      "model": "weights/official_r1_to_r2/t3_event_baseline.joblib",
       "training": {
         "samples": 200,
         "class_distribution": {
@@ -107,13 +116,13 @@
         }
       },
       "samples_per_package": {
-        "C:\\Users\\hulk cheng\\Desktop\\第1轮比赛试题与答案_1765249163770..zip": 200
+        "round1": 200
       },
       "training_failures": {
-        "C:\\Users\\hulk cheng\\Desktop\\第1轮比赛试题与答案_1765249163770..zip": []
+        "round1": []
       },
       "evaluation": {
-        "C:\\Users\\hulk cheng\\Desktop\\第2轮比赛试题与答案_1765249253663..zip": {
+        "round2": {
           "model_accuracy": 0.8148148148148148,
           "model_correct": 154,
           "model_count": 189,

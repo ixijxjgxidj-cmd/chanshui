@@ -7,7 +7,8 @@
 # /pick 请求能暴露"半死"状态。
 #
 # cron 安装（root）：
-#   */5 * * * * WEBHOOK_URL='' bash /root/dizheng/deploy/watchdog.sh >> /root/dizheng/watchdog.log 2>&1
+#   先在 crontab 顶部设置 REPO=<仓库路径>，再添加：
+#   */5 * * * * WEBHOOK_URL='' bash "$REPO/deploy/watchdog.sh" >> "$REPO/watchdog.log" 2>&1
 #
 # 可配环境变量：
 #   URL=http://127.0.0.1:8000/pick   # 探测地址

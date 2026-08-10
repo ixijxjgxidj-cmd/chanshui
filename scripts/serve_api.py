@@ -18,7 +18,8 @@
 
 - 评分：P 误差≤0.1s 得 1 分、0.1~1s 线性、>1s 不计分；S ≤0.2s 得 1 分、
   0.2~2s 线性；识别数量误差 >5% 每超 1 个扣 0.5 分；单项最低 0 分。
-  输入为 100Hz 速度波形，不含位置信息，含噪声数据（可能没有任何震相）。
+  输入为三分量 MiniSEED，记录时长与采样率不固定，可能含多个 P/S 或完全没有震相。
+  官方群确认不限制加速度记录、以速度记录为主；服务保留原始语义，不自动积分。
 
 ===== 设计要点 =====
 - 模型**启动时加载一次**并预热（跑一条合成波形，触发 cudnn autotune / 懒初始化），
@@ -799,7 +800,8 @@ def make_arg_parser() -> argparse.ArgumentParser:
                          "t2_magnitude_baseline.joblib）")
     ap.add_argument("--cls-model", default="seismicxm", choices=["seismicxm", "baseline", "off"],
                     help="/classify 端点的分类器：seismicxm=多窗TTA深度特征+余弦kNN"
-                         "（r2 两类留出 98.9%%；08 五类盲测 89.3%%；需 weights/seismicxm/ 权重）；"
+                         "（r2 两类留出 98.9%%；08 包答案只出现标签1–4，"
+                         "183/205=89.27%%，非盲测；需 weights/seismicxm/ 权重）；"
                          "baseline=去年 T3 特征树（81.5%%）；off=501。"
                          "构建失败自动降级到 501，绝不影响 /pick")
     ap.add_argument("--cls-weights", default=None,

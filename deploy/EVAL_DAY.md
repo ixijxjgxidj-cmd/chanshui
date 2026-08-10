@@ -1,8 +1,8 @@
 # 评测日 Runbook（U13）
 
-开放窗口约 1 天，任何小时级的服务半死都是该时段样本全丢。当前生产服务器仓库在
-`/home/hulkcheng0806/dizheng`（下文记 `$REPO`），服务为 systemd 单元
-`phasepick-api`，端口 8000。
+开放窗口约 1 天，任何小时级的服务半死都是该时段样本全丢。下文用 `$REPO` 表示
+目标服务器上的仓库根目录；先按实际部署设置 `export REPO=<仓库路径>`。服务为
+systemd 单元 `phasepick-api`，端口 8000。
 
 速查：
 
@@ -14,9 +14,9 @@ sudo bash $REPO/deploy/deploy_api.sh                  # 一键重部（幂等）
 bash $REPO/deploy/watchdog.sh                         # 手动跑一次真实请求探活
 ```
 
-> **2026-08-11 当前实际部署：Debian 13 云主机 + systemd，仓库路径如上，服务以
-> `hulkcheng0806` 普通用户运行；服务器本机的 T1/T2/T3 与 300 请求 soak 已全绿。
-> 公网地址为 `http://136.110.4.28:8000`，云安全组 TCP 8000 已放行，且已从非服务器
+> **2026-08-11 当前实际部署：Debian 13 云主机 + systemd，服务以非 root 普通用户
+> 运行；服务器本机的 T1/T2/T3 与 300 请求 soak 已全绿。
+> 公网地址按实际机器配置为 `http://<公网地址>:8000`，云安全组 TCP 8000 已放行，且已从非服务器
 > 机器完成 `/health`、`/pick`、`/magnitude`、`/classify` 四端点 HTTP 200 复测。
 > 当前剩余的是比赛平台 URL 登记；watchdog cron 仍待按 §2 的采集污染说明处理后安装。**
 
@@ -54,6 +54,8 @@ tmux ls                 # 看有哪些会话
 - [ ] **磁盘余量**：`df -h` 根分区 > 5GB；不够先 `journalctl --vacuum-size=200M`。
 - [ ] **权重指纹**：`md5sum $REPO/weights/*.tar.gz` 与本地记录一致；
   `systemctl cat phasepick-api | grep ExecStart` 抄下全行（基座/权重/阈值为证，出问题时对照）。
+- [ ] **发布清单**：`PYTHONUTF8=1 $REPO/.venv/bin/python $REPO/scripts/verify_release_manifest.py --require-external`
+  必须无 error/warning；默认禁止缺少 SeismicXM encoder 时静默降级。
 - [ ] **基线延迟记录**：把上面外网复测输出的 均值/中位/最大 延迟与 P/S 总数抄进值班笔记，
   评测中延迟翻倍/拾取数异常时对照。
 - [ ] **内存 soak 复测**（泄漏补丁的 Linux 侧验证，本地探针数字是 Windows 的）——
@@ -86,14 +88,15 @@ systemd 不拉起、/health 依旧绿。**判活必须用真实波形打 /pick**
 
 ```bash
 # 1) 放一条去年真题 mseed 当探测样例（不放也行，watchdog 会自动生成合成波形兜底）
-mkdir -p $REPO/probe_sample && scp <本地某条真题.mseed> root@<IP>:$REPO/probe_sample/
+mkdir -p $REPO/probe_sample && scp <本地某条真题.mseed> <SSH用户>@<公网地址>:$REPO/probe_sample/
 
 # 2) 手动跑一次确认 OK
 bash $REPO/deploy/watchdog.sh
 
 # 3) 装 cron（WEBHOOK_URL 填钉钉/企微机器人地址，留空=只写日志不告警）
 crontab -e
-# */5 * * * * WEBHOOK_URL='' bash /root/dizheng/deploy/watchdog.sh >> /root/dizheng/watchdog.log 2>&1
+# 先在 crontab 顶部设置：REPO=<仓库路径>
+# */5 * * * * WEBHOOK_URL='' bash "$REPO/deploy/watchdog.sh" >> "$REPO/watchdog.log" 2>&1
 ```
 
 评测中每小时瞄一眼 `tail $REPO/watchdog.log`：连续 FAIL→restart 循环 = 转 §4 处置。
@@ -140,8 +143,9 @@ PY=$REPO/.venv/bin/python
 
 # 50Hz 变体：把一条真题重采样到 50Hz 再打
 PYTHONUTF8=1 $PY - <<'EOF'
+import os
 import obspy
-st = obspy.read("/root/dizheng/probe_sample/*.mseed")
+st = obspy.read(os.path.join(os.environ["REPO"], "probe_sample", "*.mseed"))
 st.resample(50.0)
 st.write("/tmp/variant_50hz.mseed", format="MSEED")
 EOF

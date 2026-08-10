@@ -15,6 +15,8 @@
 #   LONG_SNR_DB=-1.0 LONG_SNR_MIN_S=300
 #   FORCE_PAIR_SHORT_S=300 FORCE_PAIR_MODE=conditional FORCE_PAIR_FLOOR=0.03
 #   LONG_DEDUP_S=20
+#   MAG_MODEL=seismicxm CLS_MODEL=seismicxm
+#   ALLOW_MODEL_FALLBACK=0    # 缺 SeismicXM 时默认中止；仅应急显式设 1
 #   P_THRESHOLD= / S_THRESHOLD=            # 拾取阈值；留空 = 用代码内全局默认
 #   P_MERGE_WINDOW= / S_MERGE_WINDOW=      # 去重合并窗(秒)；留空 = 用代码内全局默认
 #                              #（全局默认见 src/phasepicker/defaults.py，P3 网格产出后从这里接入）
@@ -58,6 +60,7 @@ LONG_DEDUP_S="${LONG_DEDUP_S:-20}"
 ENSEMBLE_LONG_MEMBERS="${ENSEMBLE_LONG_MEMBERS:-5}"
 MAG_MODEL="${MAG_MODEL:-seismicxm}"
 CLS_MODEL="${CLS_MODEL:-seismicxm}"
+ALLOW_MODEL_FALLBACK="${ALLOW_MODEL_FALLBACK:-0}"
 P_THRESHOLD="${P_THRESHOLD:-}"
 S_THRESHOLD="${S_THRESHOLD:-}"
 P_MERGE_WINDOW="${P_MERGE_WINDOW:-}"
@@ -145,7 +148,8 @@ print("PhaseNet('$PRETRAINED') 加载成功: 采样率", m.sampling_rate, "Hz, �
 PYEOF
 
 # T2/T3 共用的 SeismicXM encoder 约 208MB（超过 GitHub 单文件限制，靠 scp/发布资产）。
-# T3 当前为 TTA+余弦kNN：r2 两类 98.9%，08 五类 89.3%；不在则回退 baseline 81.5%。
+# T3 当前为 TTA+余弦 kNN：r2 两类 98.9%；08 包答案实际只出现标签 1–4，
+# 183/205=89.27%。encoder 缺失时默认中止部署，不静默回退。
 SXM="$REPO_ROOT/weights/seismicxm/seismicxm.middle.pt"
 SXM_SHA256="671d02d677c25c3d075963889602299ec71f52c724470f2fa85bb28035fe1528"
 if [ -f "$SXM" ]; then
@@ -156,12 +160,28 @@ if [ -f "$SXM" ]; then
     echo "   实际: $ACTUAL_SXM_SHA256"
     exit 1
   fi
-  echo "SeismicXM 编码器就绪且校验通过（T2 MAE 0.621；T3 r2 98.9% / 08五类 89.3%）—— $(du -h "$SXM" | cut -f1)"
+  echo "SeismicXM 编码器就绪且校验通过（T2 MAE 0.621；T3 r2 98.9% / 08标签1–4为183/205）—— $(du -h "$SXM" | cut -f1)"
 else
-  echo "T2/T3: !! 未找到 $SXM —— 将回退 baseline。"
+  echo "T2/T3: !! 未找到 $SXM。默认生产部署将在发布校验阶段中止。"
   echo "       要用当前 SeismicXM 版，从本地传 encoder 权重后重跑本脚本："
   echo "         scp -P <ssh端口> weights/seismicxm/seismicxm.middle.pt <用户>@<主机>:$REPO_ROOT/weights/seismicxm/"
+  echo "       仅应急显式降级时设置 ALLOW_MODEL_FALLBACK=1，或直接选择 baseline 模型。"
 fi
+
+# 在写入或重启服务前统一核对生产参数、Git 跟踪资产和外置编码器。默认
+# SeismicXM 配置必须有正确的 encoder；只有显式应急开关才允许缺失时继续。
+# 即使允许 fallback，已存在但大小或哈希错误的 encoder 仍会被校验器拒绝。
+VERIFY_ARGS=()
+if { [ "$MAG_MODEL" = "seismicxm" ] || [ "$CLS_MODEL" = "seismicxm" ]; } \
+   && [ "$ALLOW_MODEL_FALLBACK" != "1" ]; then
+  VERIFY_ARGS+=(--require-external)
+fi
+if [ "$ALLOW_MODEL_FALLBACK" = "1" ]; then
+  echo "!! ALLOW_MODEL_FALLBACK=1：允许缺失 SeismicXM encoder 时显式降级到 baseline"
+fi
+PYTHONUTF8=1 "$PY" "$REPO_ROOT/scripts/verify_release_manifest.py" \
+  --manifest "$REPO_ROOT/deploy/production_release_manifest.json" \
+  "${VERIFY_ARGS[@]}"
 
 echo "==================== [4/6] 安装服务 ===================="
 EXTRA_ARGS=" --weights $WEIGHTS"

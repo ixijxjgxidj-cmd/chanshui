@@ -11,7 +11,8 @@
   `aug/exam_aug6_r2train_sd.pt`、`aug/crew_sp23_r2train_sd.pt`、
   `geofon/geofon_m1_last_sd.pt`、`geofon/geofon_m3_last_sd.pt`。
 - 时长大于 300 秒的记录只使用列表前五个成员；第六、七个 GEOFON 事件窗成员
-  只参与短记录。三分布均分为 r1 1.786294 / r2 1.810140 / 08 2.010084。
+  只参与短记录。三套历史包冻结回放（答案已知，非盲测）均分为
+  r1 1.786294 / r2 1.810140 / 08 2.010084。
 - T2/T3 部署包为 `official_r1_to_r2/t2_seismicxm_r1r2.joblib` 与
   `official_r1_to_r2/t3_seismicxm_r1r2.joblib`。二者共用外置编码器
   `seismicxm/seismicxm.middle.pt`（207,709,060 bytes，因 GitHub 100MB 限制不入库），
@@ -33,7 +34,7 @@
 | `phasenet_geonet_ft1_best.pt` | stead 微调；GeoNet（新西兰）FDSN 取数，10 epochs | 合成 5 条 2.0，无真题增益记录 | 留档（GeoNet 路线已归档） |
 | `phasenet_geonet_quick_best.pt` | stead 微调；GeoNet 83 条快速验证，commit 758d84d | 无留出/真题记录 | 留档（GeoNet 路线已归档） |
 | `phasenet_ft_diting_demo_best.pt` / `_last.pt` | stead 微调；DiTing demo 小样本（训崩修复后的链路验证品） | 合成 5 条 2.0 | 留档（链路验证品，非 diting 基座微调） |
-| `official_r1_to_r2/`（t2/t3 joblib + manifest） | T2/T3 baseline 与 SeismicXM 最终部署包；API 默认选择 `t2_seismicxm_r1r2.joblib` / `t3_seismicxm_r1r2.joblib` | T2 r2 MAE **0.621**；T3 r2两类 **98.94%**、08五类 **89.3%** | **当前部署 + baseline 回退** |
+| `official_r1_to_r2/`（t2/t3 joblib + manifest） | T2/T3 baseline 与 SeismicXM 最终部署包；API 默认选择 `t2_seismicxm_r1r2.joblib` / `t3_seismicxm_r1r2.joblib` | T2 r2 MAE **0.621**；T3 r2 两类 **98.94%**；08 包标签实际为 1–4，**183/205=89.27%**（非盲测） | **当前部署 + 显式 baseline 回退** |
 
 补充说明：
 

@@ -24,10 +24,14 @@ GitHub 只读 deploy key（推荐）或其他 GitHub 凭据；没有凭据时可
 
 脚本默认使用 2026-08-11 七成员生产顺序，长记录只取前五成员，并显式启用
 300s 短记录限额、−1dB 长记录 SNR 闸、条件式强制成对和 20s 长记录去重。
+默认 T2/T3 选择 SeismicXM；部署会在服务重启前校验
+`deploy/production_release_manifest.json`。外置 encoder 缺失、大小不符或 SHA-256
+不符都会中止。只有明确的应急降级才允许设置 `ALLOW_MODEL_FALLBACK=1`。
 
 脚本做的事：装 venv 依赖（**版本按 `deploy/requirements.lock` 锁定**，torch 优先
-CPU 轮子）→ 从 `weights/*.tar.gz` 恢复 seisbench 权重缓存（**不走跨境下载**）→
-装 systemd 服务（开机自启 + 崩溃自拉起 + 内存护栏）→ 健康检查（最长 180s，
+  CPU 轮子）→ 从 `weights/*.tar.gz` 恢复 seisbench 权重缓存（**不走跨境下载**）→
+  校验生产默认值、14 个跟踪资产与外置 encoder → 装 systemd 服务（开机自启 +
+  崩溃自拉起 + 内存护栏）→ 健康检查（最长 180s，
 慢云机首启加载权重较久）→ 合成波形跑 `check_api.py` 官方格式自检。
 
 完成后**必须手工做**的四件事：
@@ -36,6 +40,12 @@ CPU 轮子）→ 从 `weights/*.tar.gz` 恢复 seisbench 权重缓存（**不走
 2. 从外网机器复测后，把 `http://<公网IP>:8000/pick` 登记到比赛平台；
 3. 确认 `weights/seismicxm/seismicxm.middle.pt` 已传入且 SHA-256 校验通过；
 4. 装评测日探活 cron 并过一遍 checklist：见 **[deploy/EVAL_DAY.md](EVAL_DAY.md)**。
+
+也可在任何部署动作前独立运行：
+
+```bash
+python scripts/verify_release_manifest.py --require-external
+```
 
 ## 依赖为什么锁版本（deploy/requirements.lock）
 
@@ -73,10 +83,10 @@ bash deploy/watchdog.sh                 # 真实波形探活（评测日 cron �
 
 ```bash
 # 只换权重
-sudo WEIGHTS=/root/dizheng/weights/best.pt bash deploy/deploy_api.sh
+sudo WEIGHTS="$PWD/weights/best.pt" bash deploy/deploy_api.sh
 
 # 权重 + P3 阈值/合并窗一起上（示例数值，以 P3 结论为准）
-sudo WEIGHTS=/root/dizheng/weights/best.pt \
+sudo WEIGHTS="$PWD/weights/best.pt" \
      P_THRESHOLD=0.2 S_THRESHOLD=0.15 \
      P_MERGE_WINDOW=1.0 S_MERGE_WINDOW=3.0 \
      bash deploy/deploy_api.sh
@@ -85,6 +95,15 @@ sudo WEIGHTS=/root/dizheng/weights/best.pt \
 阈值/合并窗环境变量**留空 = 用代码内全局默认**（单一真源
 `src/phasepicker/defaults.py`，当前 P 阈值 0.2 / S 阈值 0.15，合并窗 P 1.0s /
 S 3.0s）。重跑脚本是幂等的：依赖已装则跳过，只重写 systemd 单元并重启。
+
+如果外置 SeismicXM encoder 在故障处置时确实不可恢复，可显式降级：
+
+```bash
+sudo MAG_MODEL=baseline CLS_MODEL=baseline ALLOW_MODEL_FALLBACK=1 \
+  bash deploy/deploy_api.sh
+```
+
+该开关不接受损坏的 encoder：文件一旦存在但哈希错误，部署仍会失败。
 
 ## 编码（PYTHONUTF8）
 

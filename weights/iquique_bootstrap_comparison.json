@@ -5,11 +5,11 @@
   "weights": {
     "epoch5_best": {
       "path": "weights/phasenet_iquique_bootstrap_epoch5_best.pt",
-      "sha256": "1b45090f1905f682366acbd36e75787f1f4fc1e2992a2f9a7a611083ce64460c"
+      "sha256": "0fc4ca4ff9f118bfeb8469d4f652d78ca905347d626c27d0ff192cc6225d468d"
     },
     "epoch10_best": {
       "path": "weights/phasenet_iquique_bootstrap_best.pt",
-      "sha256": "04e0f955fa41cd6491d98a56e00094685bea71900b4bfd2867d652085c294f6c"
+      "sha256": "29270fde68c9a730af72485e667f3f97094cc974dc7937e8e780ab2d7f725325"
     }
   },
   "scores": {

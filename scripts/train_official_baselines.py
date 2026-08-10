@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -36,6 +37,34 @@ from phasepicker.tasks.baseline_models import (  # noqa: E402
 )
 from phasepicker.tasks.waveform_features import FEATURE_NAMES, extract_waveform_features  # noqa: E402
 from phasepicker.types import ExamTask, Task2Result, Task3Result  # noqa: E402
+
+
+def _package_key(path: str) -> str:
+    return os.path.basename(os.path.normpath(path))
+
+
+def _sha256_file(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _package_records(paths: Sequence[str]) -> Dict[str, dict]:
+    records: Dict[str, dict] = {}
+    for path in paths:
+        key = _package_key(path)
+        digest = _sha256_file(path)
+        record = {
+            "package_id": f"sha256:{digest}",
+            "basename": key,
+            "sha256": digest,
+        }
+        if key in records and records[key] != record:
+            raise ValueError(f"包 basename 冲突，无法生成稳定清单键：{key}")
+        records[key] = record
+    return records
 
 
 def _collect_package(zip_path: str, task: ExamTask, metadata_encoding: str = "gbk"):
@@ -74,8 +103,8 @@ def _concat_packages(paths: Sequence[str], task: ExamTask, metadata_encoding: st
         if len(X):
             xs.append(X)
             ys.append(y)
-        counts[os.path.abspath(path)] = int(len(X))
-        failures[os.path.abspath(path)] = failed
+        counts[_package_key(path)] = int(len(X))
+        failures[_package_key(path)] = failed
     if not xs:
         raise RuntimeError(f"{task.value} 没有可训练样本")
     return np.concatenate(xs), np.concatenate(ys), counts, failures
@@ -142,7 +171,7 @@ def _evaluate(bundle, paths: Sequence[str], task: ExamTask, train_y, metadata_en
             }
             print(f"    模型 {report.summary()}")
             print(f"    多数类基线 acc={const_report.accuracy:.4f}（类别={constant}）")
-        reports[os.path.abspath(path)] = result
+        reports[_package_key(path)] = result
     return reports
 
 
@@ -161,11 +190,14 @@ def main(argv=None) -> int:
             print(f"找不到文件：{path}", file=sys.stderr)
             return 2
     os.makedirs(args.out_dir, exist_ok=True)
+    package_records = _package_records(args.train_zip + args.eval_zip)
     manifest = {
+        "schema_version": 2,
         "feature_count": len(FEATURE_NAMES),
         "feature_names": list(FEATURE_NAMES),
-        "train_zips": [os.path.abspath(p) for p in args.train_zip],
-        "eval_zips": [os.path.abspath(p) for p in args.eval_zip],
+        "packages": package_records,
+        "training_packages": [_package_key(p) for p in args.train_zip],
+        "evaluation_packages": [_package_key(p) for p in args.eval_zip],
         "tasks": {},
     }
 
@@ -195,13 +227,13 @@ def main(argv=None) -> int:
                 "class_distribution": {str(k): int(v) for k, v in sorted(Counter(int(v) for v in y).items())},
             }
         eval_reports = _evaluate(bundle, args.eval_zip, task, y, args.metadata_encoding)
-        bundle.trained_on = [os.path.abspath(p) for p in args.train_zip]
+        bundle.trained_on = [_package_key(p) for p in args.train_zip]
         bundle.metrics = {"training": train_summary, "evaluation": eval_reports}
         model_path = os.path.join(args.out_dir, model_name)
         save_bundle(bundle, model_path)
         print(f"[{task.value}] 已保存模型：{model_path}")
         manifest["tasks"][task.value] = {
-            "model": os.path.abspath(model_path),
+            "model": model_name,
             "training": train_summary,
             "samples_per_package": counts,
             "training_failures": failures,

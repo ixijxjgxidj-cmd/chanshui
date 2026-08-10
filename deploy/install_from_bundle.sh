@@ -3,7 +3,8 @@
 # 从中转站分发的离线依赖包部署 API（GPU 机执行，零公网下载）
 #
 # 前提：/data/bundle/ 下已有 wheels.tar（54 个锁定版本依赖 + torch cu126）
-#       与 seismicxm.middle.pt（可选；T2 MAE 0.621，T3 r2两类98.9%/08五类89.3%）
+#       与 seismicxm.middle.pt（默认必需；T2 MAE 0.621；T3 r2 两类 98.9%，
+#       08 包标签实际为 1–4，183/205=89.27%）
 #
 # 用法（GPU 机）：
 #   bash /data/bundle/install_from_bundle.sh
