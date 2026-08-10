@@ -196,6 +196,13 @@ def convert(args) -> int:
     n = len(ds)
     for i in range(n):
         row = md.iloc[i]
+        # P+S 双标注过滤放在读波形之前：GEOFON 等大集里双标注仅 ~1%，
+        # 先判后读把 O(全集波形IO) 降到 O(双标注子集)
+        p_pre = -1 if args.noise_only else _pick_sample(row, "trace_p_arrival_sample")
+        s_pre = -1 if args.noise_only else _pick_sample(row, "trace_s_arrival_sample")
+        if args.require_ps and (p_pre < 0 or s_pre < 0):
+            skipped["no_pick"] += 1
+            continue
         try:
             wave = ds.get_waveforms(i)
         except Exception:  # noqa: BLE001 - 单条坏数据不该中断整块
@@ -206,8 +213,8 @@ def convert(args) -> int:
             continue
         wave = np.nan_to_num(wave[:3].astype("float32"), copy=False)
         sr_in = _row_sr(row, args.assume_sr)
-        p = -1 if args.noise_only else _pick_sample(row, "trace_p_arrival_sample")
-        s = -1 if args.noise_only else _pick_sample(row, "trace_s_arrival_sample")
+        p = p_pre
+        s = s_pre
         if not args.noise_only and p < 0 and s < 0:
             skipped["no_pick"] += 1
             continue
@@ -276,6 +283,8 @@ def main() -> int:
                     help="元数据缺采样率时的假定值")
     ap.add_argument("--min-len", type=int, default=1000,
                     help="重采样后短于此点数的丢弃")
+    ap.add_argument("--require-ps", action="store_true",
+                    help="只保留 P+S 双标注窗（先判后读，跳过 99% 波形 IO）")
     ap.add_argument("--noise-only", action="store_true",
                     help="纯噪声集：忽略到时列，全部标为 p=s=-1")
     ap.add_argument("--dev-frac", type=float, default=0.05,
