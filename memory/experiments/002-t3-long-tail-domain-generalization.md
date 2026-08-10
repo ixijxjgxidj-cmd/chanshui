@@ -4,6 +4,9 @@
 - `date`: 2026-08-11
 - `status`: rejected_development_domain_shift
 - `baseline_commit`: `c08bda58bad856fa1bd24f8975385696dbad11bc`
+- `result_commit`: `d42d00bfc8cb983695905393b7033c46c397cad8`
+- `branch`: `main`
+- `github_push`: 已推送到唯一远端 `origin/main`
 - `feature_cache`: `outputs/seismicxm_t3/features_tta.npz`
 - `feature_cache_sha256`: `ce213a04472713bb9f76667f62d9132ae0fa08539a9945058534759b746ea574`
 - `seed`: `20260811`
