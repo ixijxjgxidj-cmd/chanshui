@@ -561,3 +561,11 @@ decision = rejected
 - 是否能保持 gap 10 秒外 probability 与最终 picks 不变；
 - 无 gap、纯噪声、短/长、单分量和 batch 多台站必须逐位安全；
 - 若仍有远程变化，必须拒绝，不能继续用更宽最终 margin 掩盖。
+
+## 23. GitHub 提交与发布边界
+
+- 结果提交：`d4a311db0c8127c4259ce467b03dd13fe09dc60f`
+- 分支：`main`
+- 推送：已直接推送到唯一 GitHub `origin/main`
+- ignored 原始 JSON 未提交；仓库只保留脚本、测试、论文矩阵、汇总结果和失败决策。
+- 本轮为负实验，没有同步服务器、没有重启服务；线上生产推理仍保持已验收版本。

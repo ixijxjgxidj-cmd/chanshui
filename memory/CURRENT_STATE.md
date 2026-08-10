@@ -92,7 +92,7 @@ T1 冻结结果同时报告四种数量罚解释：
 
 但 R1/R2/固定噪声共 77 个变体产生 `31` 个 induced 和 `36` 个 lost，其中 `13` 个 induced、`2` 个 lost 位于物理 gap 10 秒之外。`margin=0` 只清掉 8/31 个 induced；`margin=10s` 仍留下全部 13 个远程 induced，并误删 37 个稳定 reference picks。没有 active margin，08 波形推理被锁住，`development_pass=false`。
 
-稳定结论：零填充会改变更宽上下文内的概率或条件式 force-pair 结果，所有后处理完成后的删除层无法修复。不得扩大 margin、按文件/相位自适应或把 taper/interpolation 当作同轮补救。若继续研究 gap，作用点必须前移到 annotation/正常阈值/force-pair 之前，并另行预注册；完整证据见 `memory/experiments/005-t1-gap-mask-robustness.md`。
+稳定结论：零填充会改变更宽上下文内的概率或条件式 force-pair 结果，所有后处理完成后的删除层无法修复。不得扩大 margin、按文件/相位自适应或把 taper/interpolation 当作同轮补救。若继续研究 gap，作用点必须前移到 annotation/正常阈值/force-pair 之前，并另行预注册；完整证据见 `memory/experiments/005-t1-gap-mask-robustness.md`，结果提交为 `d4a311d`，已推送 GitHub；未部署。
 
 ### 3. T3 中心化/等类轻量头在跨包验证中崩落（已拒绝）
 
