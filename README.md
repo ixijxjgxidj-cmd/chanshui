@@ -19,16 +19,19 @@
 对应入口：
 
 ```bash
-# 起官方标准 API —— 评测日生产配置（2026-08-10 定稿，全部参数显式写出）
-# T1 = 5成员概率集成 + 短文件限额 + SNR闸 + 强制成对兜底 + 长记录去重
-# 三分布盲测: 去年r1 1.779 / 去年r2 1.801 / 去年决赛08 2.009（每文件满分2）
+# 起官方标准 API —— 评测日生产配置（2026-08-11 定稿，全部参数显式写出）
+# T1 = 6成员概率集成（长记录门控只用前5）+ 短文件限额 + SNR闸
+#      + 条件式强制成对（纯噪声条目免疫）+ 长记录去重
+# 三分布盲测: 去年r1 1.781 / 去年r2 1.805 / 去年决赛08 2.008（每文件满分2）
 pip install fastapi uvicorn python-multipart requests
 python scripts/serve_api.py --port 8000 \
-  --weights "guangxi,jiangxi,shandong,weights/aug/exam_aug6_r2train_sd.pt,weights/aug/crew_sp23_r2train_sd.pt" \
+  --weights "guangxi,jiangxi,shandong,weights/aug/exam_aug6_r2train_sd.pt,weights/aug/crew_sp23_r2train_sd.pt,weights/geofon/geofon_m1_last_sd.pt" \
   --cap-short-s 300 --cap-max-p 1 --cap-max-s 1 --long-snr-db -1.0 \
-  --force-pair-short-s 300 --long-dedup-s 20
+  --force-pair-short-s 300 --force-pair-mode conditional \
+  --long-dedup-s 20 --ensemble-long-members 5
 
 # 保底命令（依赖/权重出问题时的降级链，分数递减）：
+python scripts/serve_api.py --port 8000 --weights "guangxi,jiangxi,shandong,weights/aug/exam_aug6_r2train_sd.pt,weights/aug/crew_sp23_r2train_sd.pt"  # 5成员
 python scripts/serve_api.py --port 8000 --weights "guangxi,jiangxi,shandong"  # 3成员
 python scripts/serve_api.py --port 8000 --weights weights/ustc_pickers/guangxi_sd.pt  # 单模型
 python scripts/serve_api.py --port 8000                                       # diting 零微调

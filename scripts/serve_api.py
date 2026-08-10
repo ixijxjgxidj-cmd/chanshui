@@ -426,6 +426,10 @@ def build_engine(args) -> Engine:
             else float(getattr(args, "long_dedup_s", 20.0))
         ),
         tta_polarity_flip=bool(getattr(args, "tta_flip", False)),
+        # 长记录成员门控（2026-08-11 g6 验收：短文件6成员/长记录5成员三分布同向）
+        ensemble_long_top_n=(
+            int(getattr(args, "ensemble_long_members", 0)) or None
+        ),
     )
     # --weights 支持三种形态：空=纯预训练；单路径=单模型；逗号分隔=概率集成
     # （区域简名或 .pt 路径混用均可，如 "guangxi,jiangxi,shandong"）
@@ -817,6 +821,9 @@ def make_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--tta-flip", action="store_true",
                     help="推理端 TTA：极性翻转副本并入概率平均（集成路径，耗时×2；"
                          "默认关，三分布验证通过后才开）")
+    ap.add_argument("--ensemble-long-members", type=int, default=0,
+                    help=">300s 长记录只用集成前 N 个成员（0=全部）。事件窗训练的"
+                         "成员（如 GEOFON 微调）放 --weights 列表尾部，长记录自动排除")
     ap.add_argument("--capture-dir", default=None,
                     help="请求采集目录：把评测方 POST 的原始波形+我们的响应落盘"
                          "（响应发回后的后台任务写盘，评测方零延迟感知；磁盘余量"

@@ -99,6 +99,7 @@ def _make_picker(
     force_pair_mode: str = "conditional",
     long_dedup_s: float = 0.0,
     tta_flip: bool = False,
+    ensemble_long_members: int = 0,
 ):
     """按参数构建 picker；torch/seisbench 缺失时给清晰报错。
 
@@ -131,6 +132,7 @@ def _make_picker(
         long_dedup_p_window_s=(long_dedup_s if long_dedup_s > 0 else None),
         long_dedup_s_window_s=(long_dedup_s if long_dedup_s > 0 else None),
         tta_polarity_flip=tta_flip,
+        ensemble_long_top_n=(ensemble_long_members if ensemble_long_members > 0 else None),
     )
     if is_ensemble:
         from phasepicker.inference.picker import ProbEnsemblePicker
@@ -232,6 +234,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
                          "宽窗再簇合并一次（每簇留置信度最高者）。0=关闭")
     ap.add_argument("--tta-flip", action="store_true",
                     help="推理端 TTA：极性翻转副本并入概率平均（仅集成路径，耗时×2）")
+    ap.add_argument("--ensemble-long-members", type=int, default=0,
+                    help=">300s 长记录只用集成前 N 个成员（0=全部）。事件窗训练的"
+                         "成员（如 GEOFON 微调）放列表尾部，长记录自动排除")
     return ap
 
 
@@ -280,6 +285,7 @@ def main(argv=None) -> int:
         force_pair_mode=args.force_pair_mode,
         long_dedup_s=args.long_dedup_s,
         tta_flip=args.tta_flip,
+        ensemble_long_members=args.ensemble_long_members,
     )
 
     # 3) 端到端推理 → 相对秒 Task1Result

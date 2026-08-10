@@ -27,7 +27,7 @@ overlap 0.75（r2 −2.1）、overlap 0.9（r2 +6.5 但 08 −2.4 三分布不�
 
 - `weights/seismicxm/seismicxm.middle.pt`（**208MB**，不在 git；scp/rsync 上去）
 - `git pull` 带上：`weights/ustc_pickers/guangxi_sd.pt`、
-  `weights/aug/{exam_aug6,crew_sp23}_r2train_sd.pt`（T1 集成第4/5成员，已在 git）、
+  `weights/aug/{exam_aug6,crew_sp23}_r2train_sd.pt`、`weights/geofon/geofon_m1_last_sd.pt`（T1 集成第4/5/6成员，已在 git）、
   `weights/official_r1_to_r2/t{2,3}_seismicxm_r1r2.joblib`、
   `src/phasepicker/vendor/`（SeismicXM 模型定义）及全部代码改动
 
@@ -43,15 +43,16 @@ ls -la weights/seismicxm/seismicxm.middle.pt weights/ustc_pickers/*_sd.pt \
 #       强制成对兜底 + 长记录去重(20s)，三分布 r1 1.779 / r2 1.801 / 08 2.009。
 #       cap/SNR/force-pair/long-dedup 均为 serve_api 默认值，显式写出防误改）
 python scripts/serve_api.py --port 8000 \
-  --weights "guangxi,jiangxi,shandong,weights/aug/exam_aug6_r2train_sd.pt,weights/aug/crew_sp23_r2train_sd.pt" \
+  --weights "guangxi,jiangxi,shandong,weights/aug/exam_aug6_r2train_sd.pt,weights/aug/crew_sp23_r2train_sd.pt,weights/geofon/geofon_m1_last_sd.pt" \
   --cap-short-s 300 --cap-max-p 1 --cap-max-s 1 --long-snr-db -1.0 \
-  --force-pair-short-s 300 --long-dedup-s 20
+  --force-pair-short-s 300 --force-pair-mode conditional \
+  --long-dedup-s 20 --ensemble-long-members 5
 ```
 
 ## 启动日志必须出现（缺一不可，出现"回退"字样=权重没就位）
 
 ```
-拾取器: 概率集成 × 5 成员 ['guangxi', 'jiangxi', 'shandong', 'weights/aug/exam_aug6_r2train_sd.pt', 'weights/aug/crew_sp23_r2train_sd.pt']
+拾取器: 概率集成 × 6 成员 ['guangxi', 'jiangxi', 'shandong', 'weights/aug/exam_aug6_r2train_sd.pt', 'weights/aug/crew_sp23_r2train_sd.pt', 'weights/geofon/geofon_m1_last_sd.pt']
 震级估计器: seismicxm 已就绪
 分类器: seismicxm 已就绪
 ```

@@ -129,6 +129,12 @@ class PickerConfig:
     #: 物理安全（P 初动极性本就双向），成本 = 推理时间 ×2。仅集成路径生效。
     #: 文献：LANL 滑窗预测不一致性缓解（多视角平均）；三分布同向不劣才准上生产。
     tta_polarity_flip: bool = False
+    #: 长记录只用前 N 个集成成员（None=全部）。动机（2026-08-11 g6 验收）：
+    #: GEOFON 域内微调成员在 60s 事件窗上训练，短文件三分布全升，但连续长
+    #: 记录上破坏 5 成员的平衡（08 五个长文件 -10.4 分）。时长门控后三分布
+    #: 同向：r1 +4.9 / r2 +6.5 / 08 +0.4。成员列表须把"长记录可信"成员放前面。
+    ensemble_long_top_n: Optional[int] = None
+    ensemble_long_max_duration_s: float = 300.0
 
 
 class BasePicker(ABC):
@@ -684,10 +690,22 @@ class ProbEnsemblePicker(SeisBenchPicker):
             for m in self._members
             for s in streams
         ]
+        # 长记录成员门控：>阈值时长的台站只平均前 top_n 个成员的曲线
+        top_n = self._cfg.ensemble_long_top_n
+        n_aug = len(streams)
+        long_stas: set = set()
+        if top_n is not None and 0 < top_n < len(self._members):
+            for tr in stream:
+                dur = float(tr.stats.endtime - tr.stats.starttime)
+                if dur > self._cfg.ensemble_long_max_duration_s:
+                    long_stas.add(tr.stats.station)
         base = anns[0]
         for tr in base:
+            n_keep = len(anns)
+            if tr.stats.station in long_stas:
+                n_keep = top_n * n_aug
             stack = [tr.data.astype(np.float64)]
-            for other in anns[1:]:
+            for other in anns[1:n_keep]:
                 match = [
                     t for t in other
                     if t.id == tr.id
