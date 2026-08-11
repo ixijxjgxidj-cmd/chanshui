@@ -68,16 +68,27 @@ st.write("$SAMPLE_DIR/probe.mseed", format="MSEED")
 PYEOF
 fi
 
+# 每次运行使用私有临时日志：watchdog 既可能由普通用户手动运行，也可能由
+# root cron 运行；固定 /tmp 文件会被 sticky-bit 保护，导致跨用户覆盖失败，
+# 进而把成功探活误判为失败并触发不必要重启。日志只在本次运行期间存在，
+# 失败分支先读取尾部，最后统一清理。
+if ! LAST_LOG="$(mktemp "${TMPDIR:-/tmp}/phasepick_watchdog_last.XXXXXX")"; then
+  echo "$(date '+%F %T') FAIL —— 无法创建 watchdog 私有临时日志"
+  exit 2
+fi
+cleanup_last_log() { rm -f -- "$LAST_LOG"; }
+trap cleanup_last_log EXIT
+
 if PYTHONUTF8=1 "$PY" "$REPO_ROOT/scripts/check_api.py" \
     --url "$URL" --input "$SAMPLE_DIR" --limit 1 --timeout "$TIMEOUT" \
     --probe-token-file "$PROBE_TOKEN_FILE" \
-    > /tmp/phasepick_watchdog_last.log 2>&1; then
+    > "$LAST_LOG" 2>&1; then
   echo "$(date '+%F %T') OK"
   exit 0
 fi
 
 echo "$(date '+%F %T') FAIL —— /pick 真实请求探测失败，开始自动恢复。最后输出："
-tail -5 /tmp/phasepick_watchdog_last.log || true
+tail -5 "$LAST_LOG" || true
 
 if command -v systemctl >/dev/null 2>&1 && systemctl restart "$SERVICE" 2>/dev/null; then
   echo "$(date '+%F %T') 已 systemctl restart $SERVICE"

@@ -295,6 +295,14 @@ def test_deploy_and_watchdog_scripts_fail_closed_and_never_embed_token_value():
     assert "缺失或不可读" in watchdog
     assert "--probe-token-file" in watchdog
     assert "is_loopback_host" in watchdog
+    assert (
+        'if ! LAST_LOG="$(mktemp "${TMPDIR:-/tmp}/phasepick_watchdog_last.XXXXXX")"'
+        in watchdog
+    )
+    assert '> "$LAST_LOG" 2>&1' in watchdog
+    assert 'tail -5 "$LAST_LOG"' in watchdog
+    assert "trap cleanup_last_log EXIT" in watchdog
+    assert "/tmp/phasepick_watchdog_last.log" not in watchdog
     assert ".runtime/" in ignore
 
 
