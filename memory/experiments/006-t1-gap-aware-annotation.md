@@ -507,3 +507,5 @@ SHA-256 = e39c261f61a81d1895c26fc4767d9a3a8ccefc85c8de921d30fa315d6437ada6
 最终决策：**拒绝局部 P/S annotation 固定 guard 置零，不改生产、不部署。** 它能 veto 被遮区间的峰，却无法恢复 zero-fill 已经通过卷积与滑窗聚合造成的远程 probability、阈值、floor 峰和最终 Pick 变化。不得继续扩大 guard、按文件/相位自适应，或在同一轮切换 NaN、taper、插值、重建和训练。
 
 只有出现真实 gap/独立 gap 包、可冻结的 gap augmentation 训练划分、模型层显式 observation mask，或可验证的窗口贡献重算机制时才重开 gap。当前最高价值工作转向 watchdog 捕获隔离与最终回滚/再前滚演练。
+
+实现、测试、论文矩阵和负结果报告已在 `main` 提交为 `bbf6e45`，并成功推送到唯一 GitHub 远端。该提交不包含 ignored 原始 JSON、比赛数据、凭据或生产默认变更。
