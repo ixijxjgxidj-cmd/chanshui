@@ -20,7 +20,8 @@
 - 公网 `/health`、`/pick`、`/magnitude`、`/classify` 已再次用 51.5 秒真实三分量代表样本验收为 HTTP 200；T1 返回 1P/1S，T2/T3 均返回单台站合法非空结果，公网请求没有 accepted 探针标记。
 - 新提交重启后，2 秒三分量线上烟测得到 `/classify={"SMK2":5}`、`/magnitude={"SMK2":4.81}`、`/pick={}`，确认 T2/T3 短窗修复已生效且 T1 保护未回归。
 - 300 请求稳态验收：均值约 42.17 ms，P95 约 44.91 ms，最大约 56.35 ms，RSS 增长约 4 MiB。
-- 发布链最终审计时生产捕获目录与 manifest 均为空；随后观察到 1 条非 probe 的公网 `/pick` 真实样本（1 个波形项，217 字节，来源不是 loopback，文件仍完整），已保留用于后续数据治理与复核，不把它误删为探针。
+- 发布链最终审计时生产捕获目录与 manifest 均为空；随后观察到 1 条非 probe 的公网 `/pick` 畸形上传（1 个 217 字节项，来源不是 loopback，文件仍完整）。服务器生产环境中的 ObsPy 无法将它解析为 MiniSEED，API 安全返回空对象；该记录保留为接口鲁棒性审计证据，不作为训练样本，也不误删为探针。
+- 最新只读运维复核：公网 `/health` 为 HTTP 200 且 `status=ok`，systemd 没有 failed unit，服务器仓库所在文件系统约有 230 GiB 可用空间。
 - 服务器已经配置只属于本仓库的只读 GitHub deploy key；私钥只保留在服务器且权限为 `0600`。仓库本地 SSH 命令固定 `IdentitiesOnly=yes` 与严格主机校验，GitHub 主机公钥来自官方 metadata API。`ls-remote`、`fetch`、`merge --ff-only` 均已通过，写入 dry-run 被 GitHub 拒绝，服务器远端只保留 GitHub。
 - watchdog 捕获隔离已部署并完成双向验收：只有“直接数值型 loopback 对端 + 0600 文件中的随机 token”同时满足才跳过采集；代理头不参与授权，服务还必须返回 accepted。Linux 专用测试 `26 passed`；认证回环、手动 watchdog 和真实 cron 的捕获增量均为 `0`，公网伪造 token/代理头仍恰好产生 `1` 条捕获并已精确清理。
 - `deploy/production_release_manifest.json` 已成为生产资产、参数和 fallback 策略的机器可校验清单；`scripts/verify_release_manifest.py --require-external` 已对本地 14 个跟踪资产和外置 SeismicXM encoder 全绿。
