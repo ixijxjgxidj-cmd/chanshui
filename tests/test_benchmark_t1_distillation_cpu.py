@@ -89,6 +89,49 @@ def test_resample_array_preserves_component_axis():
     assert resampled.shape == (3, 5)
 
 
+def test_build_estimates_uses_measured_probability_grid_for_cache_size():
+    inventory = [
+        _record("round1", "short.mseed", 52.26),
+        _record("round1", "long.mseed", 4000.01),
+    ]
+    teacher_records = [
+        {
+            "duration_s": 52.26,
+            "active_members": 7,
+            "annotation_seconds": 0.07,
+            "average_seconds": 0.001,
+            "effective_probability_samples": 2551,
+            "probability_sampling_rate": 50.0,
+        },
+        {
+            "duration_s": 4000.01,
+            "active_members": 5,
+            "annotation_seconds": 0.5,
+            "average_seconds": 0.01,
+            "effective_probability_samples": 199501,
+            "probability_sampling_rate": 50.0,
+        },
+    ]
+    result = MODULE._build_estimates(
+        inventory=inventory,
+        teacher_records=teacher_records,
+        student={"step_seconds_mean": 0.01},
+        model_window_s=60.02,
+        overlap=0.5,
+        long_threshold_s=300.0,
+        long_members=5,
+        all_members=7,
+        student_window_s=60.02,
+        student_stride_s=30.0,
+        student_batch=2,
+        estimate_epochs=10,
+    )
+    assert result["teacher"]["probability_sampling_rate"] == 50.0
+    assert abs(result["teacher"]["annotation_trim_seconds"] - 10.0) < 0.02
+    expected_samples = 2551 + 199501
+    assert result["cache"]["averaged_float16_bytes"] == expected_samples * 3 * 2
+
+
 def test_quantile_indices_are_deterministic_and_interior():
     assert MODULE._quantile_indices(0, 2) == []
     assert MODULE._quantile_indices(2, 2) == [0, 1]

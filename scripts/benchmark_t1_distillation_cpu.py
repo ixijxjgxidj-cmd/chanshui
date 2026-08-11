@@ -406,6 +406,8 @@ def _build_estimates(
 ) -> dict:
     unit_costs = []
     average_costs_per_sample = []
+    probability_rates = []
+    probability_trim_s = []
     for record in teacher_records:
         windows = estimate_sliding_windows(record["duration_s"], model_window_s, overlap)
         work_units = windows * record["active_members"]
@@ -413,8 +415,16 @@ def _build_estimates(
         average_costs_per_sample.append(
             record["average_seconds"] / max(record["effective_probability_samples"], 1)
         )
+        probability_rate = float(record["probability_sampling_rate"])
+        probability_rates.append(probability_rate)
+        padded_duration = max(record["duration_s"], model_window_s + 1.0)
+        probability_trim_s.append(
+            padded_duration - record["effective_probability_samples"] / probability_rate
+        )
     annotation_s_per_member_window = statistics.median(unit_costs)
     averaging_s_per_sample = statistics.median(average_costs_per_sample)
+    probability_rate = statistics.median(probability_rates)
+    annotation_trim_s = statistics.median(probability_trim_s)
 
     total_annotation_s = 0.0
     total_average_s = 0.0
@@ -423,8 +433,11 @@ def _build_estimates(
         active_members = long_members if record.duration_s > long_threshold_s else all_members
         windows = estimate_sliding_windows(record.duration_s, model_window_s, overlap)
         total_annotation_s += annotation_s_per_member_window * windows * active_members
-        effective_duration = max(record.duration_s, model_window_s + 1.0)
-        probability_samples = int(math.ceil(effective_duration * record.sampling_rate))
+        effective_duration = max(
+            1.0 / probability_rate,
+            max(record.duration_s, model_window_s + 1.0) - annotation_trim_s,
+        )
+        probability_samples = int(math.floor(effective_duration * probability_rate + 0.5))
         total_probability_samples += probability_samples * record.station_count
         total_average_s += averaging_s_per_sample * probability_samples * record.station_count
     teacher_total_s = total_annotation_s + total_average_s
@@ -464,8 +477,14 @@ def _build_estimates(
     }
     gated_member_samples = 0
     for record in inventory:
-        effective_duration = max(record.duration_s, model_window_s + 1.0)
-        samples = int(math.ceil(effective_duration * record.sampling_rate)) * record.station_count
+        effective_duration = max(
+            1.0 / probability_rate,
+            max(record.duration_s, model_window_s + 1.0) - annotation_trim_s,
+        )
+        samples = (
+            int(math.floor(effective_duration * probability_rate + 0.5))
+            * record.station_count
+        )
         gated_member_samples += samples * (
             long_members if record.duration_s > long_threshold_s else all_members
         )
@@ -478,6 +497,8 @@ def _build_estimates(
         "teacher": {
             "annotation_seconds_per_member_window": annotation_s_per_member_window,
             "averaging_seconds_per_probability_sample": averaging_s_per_sample,
+            "probability_sampling_rate": probability_rate,
+            "annotation_trim_seconds": annotation_trim_s,
             "estimated_seconds": teacher_total_s,
             "estimated_hours": teacher_hours,
             "estimated_files_per_hour": len(inventory) / max(teacher_hours, 1e-12),
@@ -632,6 +653,9 @@ def main(argv: Iterable[str] | None = None) -> int:
                 annotations.append(annotation)
         averaged, cache_bytes, average_s = _average_annotations(annotations)
         probability_samples = sum(len(item["data"]) for item in averaged) // max(len(averaged), 1)
+        probability_sampling_rate = statistics.median(
+            float(item["sampling_rate"]) for item in averaged
+        )
         teacher_records.append(
             {
                 "package": selected_record.package,
@@ -645,6 +669,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                 "teacher_seconds": sum(timings) + average_s,
                 "files_per_hour": 3600.0 / (sum(timings) + average_s),
                 "effective_probability_samples": probability_samples,
+                "probability_sampling_rate": probability_sampling_rate,
                 "averaged_cache_float32_bytes": cache_bytes,
                 "averaged_cache_float16_bytes": cache_bytes // 2,
                 "peak_rss_bytes": _peak_rss_bytes(),
@@ -764,6 +789,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(output, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    if os.name == "posix":
+        output_path.chmod(0o600)
     print(json.dumps(output["estimates"]["decision"], indent=2, ensure_ascii=False))
     print(f"evidence: {output_path}")
     return 0
