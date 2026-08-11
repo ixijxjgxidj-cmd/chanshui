@@ -537,6 +537,11 @@ def main(argv: Iterable[str] | None = None) -> int:
         "final08": args.final08,
     }
     inventory, inventory_runtime = _scan_inventory(package_paths)
+    print(
+        f"[inventory] files={len(inventory)} "
+        f"elapsed={inventory_runtime['elapsed_s']:.2f}s",
+        flush=True,
+    )
     expected = {"round1": 1000, "round2": 915, "final08": 784}
     actual = {
         package: sum(record.package == package for record in inventory)
@@ -570,6 +575,11 @@ def main(argv: Iterable[str] | None = None) -> int:
     picker = ProbEnsemblePicker.from_member_names(list(args.members), cfg)
     model_load_s = time.perf_counter() - load_started
     model_window_s = float(picker._model.in_samples) / float(picker._model.sampling_rate)
+    print(
+        f"[teacher] loaded_members={len(picker._members)} "
+        f"elapsed={model_load_s:.2f}s",
+        flush=True,
+    )
 
     if not args.skip_warmup:
         warm = next(record for record in selected if record.duration_s <= args.long_threshold_s)
@@ -584,6 +594,12 @@ def main(argv: Iterable[str] | None = None) -> int:
     teacher_records: list[dict] = []
     student_sources: list[tuple[Waveform, list[dict]]] = []
     for selected_record in selected:
+        print(
+            f"[teacher] start package={selected_record.package} "
+            f"file={selected_record.sample.file_id} "
+            f"duration={selected_record.duration_s:.2f}s",
+            flush=True,
+        )
         waveforms = _load_sample_waveforms(selected_record.sample)
         if len(waveforms) != 1:
             raise RuntimeError(
@@ -629,6 +645,12 @@ def main(argv: Iterable[str] | None = None) -> int:
                 "peak_rss_bytes": _peak_rss_bytes(),
             }
         )
+        print(
+            f"[teacher] done package={selected_record.package} "
+            f"file={selected_record.sample.file_id} "
+            f"members={active_members} elapsed={sum(timings) + average_s:.2f}s",
+            flush=True,
+        )
         if (
             selected_record.duration_s <= args.long_threshold_s
             and len(student_sources) < args.student_examples
@@ -665,6 +687,11 @@ def main(argv: Iterable[str] | None = None) -> int:
         warmup_steps=args.student_warmup_steps,
         batch_size=args.student_batch,
         learning_rate=args.student_lr,
+    )
+    print(
+        f"[student] steps={student['measured_steps']} "
+        f"mean_step={student['step_seconds_mean']:.4f}s",
+        flush=True,
     )
 
     estimates = _build_estimates(
