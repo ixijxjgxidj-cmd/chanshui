@@ -245,7 +245,12 @@ def _resample_array(data: np.ndarray, source_rate: float, target_rate: float) ->
 
     ratio = Fraction(float(target_rate) / float(source_rate)).limit_denominator(1000)
     return np.asarray(
-        resample_poly(np.asarray(data, dtype=np.float32), ratio.numerator, ratio.denominator),
+        resample_poly(
+            np.asarray(data, dtype=np.float32),
+            ratio.numerator,
+            ratio.denominator,
+            axis=-1,
+        ),
         dtype=np.float32,
     )
 

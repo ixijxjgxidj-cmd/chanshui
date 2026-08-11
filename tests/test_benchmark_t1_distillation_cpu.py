@@ -83,6 +83,12 @@ def test_fit_length_crops_and_edge_pads_last_axis():
     assert cropped.tolist() == [[0.0, 1.0, 2.0], [5.0, 6.0, 7.0]]
 
 
+def test_resample_array_preserves_component_axis():
+    data = np.arange(30, dtype=np.float32).reshape(3, 10)
+    resampled = MODULE._resample_array(data, source_rate=100.0, target_rate=50.0)
+    assert resampled.shape == (3, 5)
+
+
 def test_quantile_indices_are_deterministic_and_interior():
     assert MODULE._quantile_indices(0, 2) == []
     assert MODULE._quantile_indices(2, 2) == [0, 1]
