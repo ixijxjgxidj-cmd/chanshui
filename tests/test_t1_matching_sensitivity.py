@@ -6,6 +6,7 @@ from scripts.audit_t1_matching_sensitivity import (
     match_phases_exact,
     match_score,
     parse_case,
+    read_t1_answers,
 )
 from phasepicker.scoring.scorer import match_phases
 
@@ -40,3 +41,17 @@ def test_exact_matcher_empty_inputs_are_reported():
 def test_parse_case_requires_answer_and_prediction_paths():
     with pytest.raises(ValueError):
         parse_case("round1=answers.zip")
+
+
+def test_read_t1_answers_accepts_minimal_text(tmp_path):
+    answer = tmp_path / "T1.an"
+    answer.write_text(
+        "T1.A.Q0001.mseed : P : 1.0 : S : 2.0\n",
+        encoding="utf-8",
+    )
+
+    parsed = read_t1_answers(answer)
+
+    assert list(parsed) == ["T1.A.Q0001.mseed"]
+    assert len(parsed["T1.A.Q0001.mseed"].p_times_s) == 1
+    assert len(parsed["T1.A.Q0001.mseed"].s_times_s) == 1

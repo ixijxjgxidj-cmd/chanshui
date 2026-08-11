@@ -157,13 +157,20 @@ def _times(result: Task1Result | None, phase_type: str) -> list[float]:
     return [float(value) for value in values]
 
 
+def read_t1_answers(path: Path) -> dict[str, Task1Result]:
+    """读取完整答案包或只含 T1 行的最小审计文本。"""
+    if path.suffix.lower() == ".zip":
+        return read_package_answers(str(path), ExamTask.T1)  # type: ignore[return-value]
+    return parse_task1_answer_lines(read_text_lines(str(path)))
+
+
 def audit_case(spec: CaseSpec) -> dict[str, object]:
     if not spec.answer_path.is_file():
         raise FileNotFoundError(f"答案包不存在：{spec.answer_path.name}")
     if not spec.prediction_path.is_file():
         raise FileNotFoundError(f"预测文件不存在：{spec.prediction_path.name}")
 
-    answers = read_package_answers(str(spec.answer_path), ExamTask.T1)
+    answers = read_t1_answers(spec.answer_path)
     predictions = parse_task1_answer_lines(read_text_lines(str(spec.prediction_path)))
     phase_summaries: dict[str, object] = {}
 
