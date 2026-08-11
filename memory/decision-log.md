@@ -90,3 +90,13 @@
 - 防终检泄漏：开发没有 active margin，因此没有运行 08 波形推理；ignored JSON 中 `holdout08.records=null`。
 - 解释：gap 已在更上游改变概率、阈值峰或 force-pair 上下文，最终删除层不能恢复远程丢失，也不能删除远程诱发。不得扩大 margin、自适应选窗或在同轮改成 taper/interpolation。
 - 重开边界：只允许把作用点前移到 annotation/正常阈值/force-pair 之前，重新检索新论文并独立预注册；若 gap 10 秒外 probability/final picks 仍变化则同样拒绝。
+
+## 2026-08-11：拒绝 P/S annotation 局部固定 guard，冻结 zero-fill 后处理方向
+
+- 决策：不在七成员 annotation 平均后、正常阈值与 conditional force-pair 前按 gap±`0/0.5/1/2/5/10s` 把 P/S probability 局部置零；六档全部拒绝，不改生产、不部署。
+- 实现可信度：三包/权重/七成员身份、77/77 注入、annotation 对齐、五条 annotation→生产 Pick 零差复刻、66/66 no-gap 对象身份、重复性全部通过；400,000×2 样点、100 gaps、200 次 P95 `1.6621 ms`。拒绝原因不是实现或性能。
+- 概率证据：754,070 个 gap 10 秒外 P/S 样点中，295,900 个变化超过 `1e-6`，最大差 `0.609977`；正常阈值与 `0.03` floor 分别穿越 745/3,551 次。
+- 峰与最终输出：normal remote peak 为 `12 induced / 2 lost`，floor 为 `22 / 38`；raw final 精确复现第 5 轮的 `31 induced / 36 lost / 13 remote induced / 2 remote lost`。77/77 变体 probability 条件失败，28/77 峰条件失败，13/77 最终 Pick 条件失败。
+- guard 诊断：0 秒已恶化为 `33 residual / 40 lost`；10 秒仍有 `18 residual`，并产生 `77 lost / 37 collateral`。局部 veto 不能回溯修复卷积/滑窗已造成的远程变化。
+- 防终检泄漏：没有 active guard，选择 `OFF`；08 波形未运行，ignored JSON 保持 `holdout08.records=null`。
+- 稳定边界：不再扩大固定 guard，不按文件/相位/gap 长度自适应，不在相同 zero-fill 输出上改 NaN、taper 或 interpolation。只有真实 gap/独立 gap 包、可冻结 gap augmentation 训练划分、模型层 observation mask 或可靠滑窗贡献重算机制出现时重开。

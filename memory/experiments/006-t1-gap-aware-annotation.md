@@ -2,7 +2,7 @@
 
 - 日期：2026-08-11
 - 轮次：06
-- 状态：**已预注册；尚未实现候选、尚未运行新的 annotation/带 gap 模型推理**
+- 状态：**实验完成；开发拒绝；08 终检锁定；未进入生产、未部署**
 - 基准分支：`main`
 - 基准提交：`6d0f50baf33f37175c832e2391b714e083396b07`
 - 当前生产推理提交：`53117b9d5912578c93d90e0a53774d66d0286aef`
@@ -391,3 +391,119 @@ JSON 至少记录：
 - 可靠的窗口贡献追踪，能在不伤害远处真实峰的前提下重算 annotation。
 
 在这些条件出现前，最高价值工作转向 watchdog 捕获隔离与最终回滚/前滚发布演练，而不是继续在同一零填充输出上叠加后处理。
+
+## 17. 实际实现与结构验证
+
+实际新增隔离研究脚本 `scripts/experiment_t1_gap_annotation.py` 与定向测试 `tests/test_t1_gap_annotation.py`。生产 `picker.py`、`PickerConfig`、API、release manifest 和部署脚本均未修改。
+
+实现前发现并修正了两处只影响实验可信度的问题：
+
+1. 08 路径只生成冻结 guard，却曾按完整 guard 网格聚合；现已让聚合函数显式接收实际 guard 集，开发传六档、08 只传冻结的一档。
+2. annotation 候选的长记录 SNR 后处理必须读取真实零填充后的 `injection.waveform`；现已不再误用无 gap reference 波形。
+
+同时增加运行时 no-gap 哨兵：对 11 条开发样本 × 6 个 guard 共 66 次调用，要求返回同一 Stream 对象、annotation 哈希不变、结构不变，且最终 Pick 与 reference 在冻结容差内完全一致。
+
+结构结果：
+
+- 输入包身份：通过；
+- 生产权重身份：通过；
+- ensemble 成员数：`7`；
+- 77/77 注入数组身份：通过；
+- annotation trace 对齐：通过；
+- 五条哨兵从 annotation 复刻 `picker.pick()`：数量、phase、station、time、confidence 完全一致，最大 time/confidence delta 均为 `0`；
+- 66/66 no-gap 调用：通过；
+- 五条重复 annotation 哈希：通过；
+- 定向测试：`15 passed`。
+- 全量回归：`317 passed, 7108 warnings`；
+- 发布清单：`PASS production-g7-seismicxm-20260811 | tracked=14 external=1`。
+
+第 6 轮 raw 输入还与第 5 轮逐项交叉复核：11/11 样本、77/77 变体的注入数组哈希、样点区间、相对 gap、reference picks 和 raw gapped final picks 均为 `0` 处不一致。因而本轮概率层结论与第 5 轮最终 Pick 现象属于同一批冻结输入，不是重新生成变体造成的差异。
+
+## 18. 阶段 A：远程概率必要条件失败
+
+全部 77 个变体都出现 gap 10 秒外 probability 差异，阶段 A 结果为失败：
+
+| 指标 | 实际值 | 预注册要求 |
+|---|---:|---:|
+| remote P/S samples | 754,070 | 诊断量 |
+| `abs(delta) > 1e-6` | 295,900 | 0 |
+| remote max absolute delta | 0.6099771344 | 数值等价 |
+| remote mean absolute delta | 0.0007498230 | 数值等价 |
+| normal-threshold crossings | 745 | 0 |
+| `0.03` floor crossings | 3,551 | 0 |
+| normal remote induced peaks | 12 | 0 |
+| normal remote lost peaks | 2 | 0 |
+| floor remote induced peaks | 22 | 0 |
+| floor remote lost peaks | 38 | 0 |
+| raw final remote induced | 13 | 0 |
+| raw final remote lost | 2 | 0 |
+
+失败覆盖层次不是单一后处理现象：
+
+- `77/77` 变体 probability 必要条件失败；
+- `28/77` 变体出现远程 normal/floor 峰集合变化；
+- `13/77` 变体出现远程最终 Pick 变化；
+- raw final 总数精确复现第 5 轮：`31 induced / 36 lost / 13 remote induced / 2 remote lost`。
+
+按输入组拆分：
+
+| 组 | 变体 | `>1e-6` 样点 | normal/floor crossings | raw final induced/lost | remote induced/lost |
+|---|---:|---:|---:|---:|---:|
+| R1 | 28 | 84,233 | 350 / 1,213 | 15 / 15 | 6 / 1 |
+| R2 | 35 | 129,544 | 395 / 1,580 | 16 / 21 | 7 / 1 |
+| 固定噪声 | 14 | 82,123 | 0 / 758 | 0 / 0 | 0 / 0 |
+
+固定噪声虽然没有形成最终误报，仍出现大量远程概率变化和 floor 穿越，说明“最终空列表”不能证明 zero-fill 对模型表征无影响。最大单变体远程概率差来自 R1 的 `mid-10-all`，为 `0.6099771344`。
+
+## 19. 阶段 B 离线 guard 诊断
+
+阶段 A 已失败，因此所有 active guard 按预注册无条件不可录取。仍完成了只基于已导出 annotation 的离线诊断：
+
+| guard | residual induced | lost reference | collateral changed | 资格 |
+|---:|---:|---:|---:|---|
+| 0.0s | 33 | 40 | 0 | 拒绝 |
+| 0.5s | 28 | 41 | 1 | 拒绝 |
+| 1.0s | 28 | 47 | 7 | 拒绝 |
+| 2.0s | 26 | 49 | 9 | 拒绝 |
+| 5.0s | 18 | 60 | 20 | 拒绝 |
+| 10.0s | 18 | 77 | 37 | 拒绝 |
+
+与第 5 轮的最终列表删除不同，annotation mask 会改变 conditional force-pair 的输入，因此 `guard=0` 甚至把 residual induced 从 raw 的 31 增到 33，并把 lost 从 36 增到 40。扩大 guard 最多把 residual 降到 18，但不能恢复 13 个远程 induced 或 2 个远程 lost，且 lost/collateral 快速上升。不存在 active guard，选择保持 `OFF`。
+
+## 20. 性能、终检锁与最终决定
+
+性能构造按预注册运行两条各 400,000 样点的 float32 P/S annotation、100 gaps、200 次：
+
+```text
+P95 = 1.6620899667 ms
+limit = 10 ms
+structure_pass = true
+performance_pass = true
+```
+
+拒绝原因是科学必要条件失败，不是实现、确定性或性能问题。
+
+开发没有选出 active guard，因此：
+
+```text
+development_guard_selected = OFF
+holdout08.records = null
+holdout08_pass = false
+development_pass = false
+production_eligible = false
+decision = rejected
+```
+
+08 五条终检波形没有读取或运行模型推理。ignored 原始结果：
+
+```text
+outputs/experiments/round06_t1_gap_annotation.json
+size = 1,318,300 bytes
+SHA-256 = e39c261f61a81d1895c26fc4767d9a3a8ccefc85c8de921d30fa315d6437ada6
+```
+
+结果 JSON 的本地盘符路径、Gitee、SSH/代理/私钥模式扫描计数均为 `0`。
+
+最终决策：**拒绝局部 P/S annotation 固定 guard 置零，不改生产、不部署。** 它能 veto 被遮区间的峰，却无法恢复 zero-fill 已经通过卷积与滑窗聚合造成的远程 probability、阈值、floor 峰和最终 Pick 变化。不得继续扩大 guard、按文件/相位自适应，或在同一轮切换 NaN、taper、插值、重建和训练。
+
+只有出现真实 gap/独立 gap 包、可冻结的 gap augmentation 训练划分、模型层显式 observation mask，或可验证的窗口贡献重算机制时才重开 gap。当前最高价值工作转向 watchdog 捕获隔离与最终回滚/再前滚演练。

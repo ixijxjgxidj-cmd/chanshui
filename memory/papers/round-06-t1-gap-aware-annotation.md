@@ -1,7 +1,7 @@
 # 研究轮次 06：T1 gap-aware annotation 与显式缺失掩码
 
 - 日期：2026-08-11
-- 状态：AnySearch 发现、Playwright 逐篇核验和方法决策已完成；尚未运行第 6 轮模型实验
+- 状态：AnySearch 发现、Playwright 逐篇核验、方法决策和第 6 轮最小反证均已完成；候选拒绝
 - 对应预注册：`memory/experiments/006-t1-gap-aware-annotation.md`
 - 基准提交：`6d0f50baf33f37175c832e2391b714e083396b07`
 - 本轮问题：第 5 轮证明最终 `Pick` 列表固定 margin 删除无法修复零填充缺口造成的远程诱发与丢失。本轮只研究一个更上游、可证伪的问题：在正常阈值、条件式 force-pair 和 dedup 之前消费 `Waveform.gaps`，局部屏蔽 P/S annotation，是否足以阻止缺口候选进入后处理，同时保持物理缺口 10 秒外概率与最终输出不变？
@@ -302,3 +302,18 @@ ensemble annotation
 ```
 
 它能阻止被遮峰参与后续逻辑，属于不同作用点和不同因果机制；但若模型前向本身已改变远程 annotation，本轮仍必须拒绝。这一硬边界正来自本轮 partial/gated convolution、GRU-D、PhaseNet-DAS 和 blackout-imputation 证据，而不是重复扩大第 5 轮删除窗。
+
+## 9. 实验对论文判断的反向校验
+
+第 6 轮按预注册在 11 条 R1/R2/固定噪声样本的 77 个 zero-fill 变体上导出七成员 raw annotation。结构、输入/权重身份、annotation 到生产 Pick 的精确复刻、no-gap 对象身份、重复性和性能均通过，因此可以解释科学结果。
+
+实测与 partial convolution、GRU-D、SAITS 等论文形成的结构判断一致：zero-fill 在模型前向中被当作有效数值，影响并不局限于物理 gap。gap 10 秒外 754,070 个 P/S 样点中，295,900 个变化超过 `1e-6`；最大绝对差 `0.609977`，并造成 745 次正常阈值穿越、3,551 次 `0.03` floor 穿越。峰层出现 `12/2` 个 normal remote induced/lost 和 `22/38` 个 floor remote induced/lost，最终层仍有 `13/2` 个 remote induced/lost。
+
+因此论文矩阵中的关键区分得到直接项目证据支持：
+
+1. annotation 层固定 mask 是候选 veto，不是 mask-aware convolution；
+2. 输出端局部置零不能回溯修复已经污染的远程特征和 probability；
+3. 纯噪声最终仍为空也不足以证明安全，因为噪声变体已有 82,123 个远程样点超过容差和 758 次 floor 穿越；
+4. 连续 blackout gap 的有效处理若要重开，应把 observation mask 或 gap augmentation 放进模型/训练，而不是继续扩固定 guard。
+
+六档 guard 均不可录取。最宽 10 秒 guard 仍残留 18 个 induced，同时造成 77 个 lost 和 37 个 collateral changes。08 终检按预注册保持锁定，生产未修改、未部署。完整逐变体证据见 `memory/experiments/006-t1-gap-aware-annotation.md`。

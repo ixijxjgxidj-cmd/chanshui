@@ -22,6 +22,7 @@
 | T2 源包 OOF residual + 预测值/低维 PCA 余弦邻域强收缩 | R1/R2 源包嵌套 OOF 分别改善 `0.01825/0.00846`，并稳定选择 `pca0_k40_s50`；但 R1→R2 MAE `0.621046→0.621532`，R2→R1 `0.660726→0.669618`，两个方向 signed bias 均扩大，gate 覆盖 `90–93%` 也不能识别跨包风险 | 开发阶段拒绝；未读取 08，不改 T2 bundle/API | `memory/experiments/003-t2-cross-package-residual-calibration.md`；结果 SHA-256 `91903410...61c3` |
 | T1 长记录 20 秒去重后 FIFO 完整 P/S 事件几何 confidence 删除（tau 0.35/0.40/0.45） | R2 三档最坏归一化增益均为负，最低档 FP `126→87` 却 FN `37→56`；08 tau 0.35 虽四口径总分 `+9.09～+16.09`，仍使 FN `96→116` 并伤害 4/5 个长文件。两包 full/全部 LOFO 均选择 OFF | 开发阶段拒绝；不扩网格、不改生产、不部署 | `memory/experiments/004-t1-long-record-event-confidence.md`；结果 SHA-256 `dc55ae26...5b9d` |
 | T1 所有后处理完成后的最终 Pick 列表固定 gap margin mask（0/0.5/1/2/5/10s） | 77 个 R1/R2/噪声变体产生 31 induced、36 lost，其中 13 induced、2 lost 在 gap 10 秒外；0s 只清 8 个，10s 仍留 13 个远程 induced 且误删 37 个稳定 picks。结构、single/batch、重复性和 P95 2.1463ms 均通过 | 开发阶段拒绝；未运行 08 波形，不改生产、不部署 | `memory/experiments/005-t1-gap-mask-robustness.md`；结果 SHA-256 `8f4cd272...dedc` |
+| T1 七成员 annotation 平均后、阈值/force-pair 前的 P/S gap guard 置零（0/0.5/1/2/5/10s） | 754,070 个远程 P/S 样点中 295,900 个变化超过 `1e-6`，最大差 0.609977；normal/floor 阈值穿越 745/3,551，remote peaks 为 12/2 与 22/38 induced/lost，raw final 精确复现 13/2 remote induced/lost。0s 为 33 residual/40 lost，10s 为 18 residual/77 lost/37 collateral；结构与 P95 1.6621ms 通过 | 阶段 A 拒绝；77/77 probability 条件失败，未运行 08，不改生产、不部署 | `memory/experiments/006-t1-gap-aware-annotation.md`；结果 SHA-256 `e39c261f...7ada6` |
 
 ## 可重新开启的条件
 
@@ -33,3 +34,4 @@
 - 对 T2 OOF residual 条目，必须出现合法无标签目标批次、可解释包偏移的站点/区域/仪器/距离/绝对幅值元数据、DiTing/目标区标签或新的独立包；仅扩大 PCA 维数、k、shrinkage、gate 分位或根据包均值加常数不构成重开理由。
 - 对 T1 长记录事件 confidence 条目，必须出现新的独立长记录包、显式 event/noise 分支、可解释 confidence 校准或多台站/位置/走时证据；仅增加阈值、改变 60 秒窗口、换 min/max/加权分数或按 08 事后挑规则不构成重开理由。
 - 对 T1 最终列表 gap mask 条目，仅把 margin 改成别的固定数、按 gap 长度/相位/文件自适应、加 taper/interpolation 或用 08 回选都不构成重开理由。只有把作用点实质前移到 annotation/阈值/force-pair 之前，并证明 gap 10 秒外输出不变，才是不同机制。
+- 对 T1 annotation gap mask 条目，前移到输出 probability 后仍已失败；任何固定/自适应局部 guard、NaN 或相同 zero-fill 输出上的 taper/interpolation 都不构成新机制。只有真实 gap/独立 gap 包、可冻结 gap augmentation 训练划分、模型层显式 observation mask，或可验证的滑窗贡献重算机制才允许重开。

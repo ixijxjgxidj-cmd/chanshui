@@ -4,7 +4,7 @@
 
 ## 一句话结论
 
-项目已经从“原型”推进到“可公开服务且有冻结证据链的三任务生产版本”：T1 七成员概率集成、T2/T3 SeismicXM 特征模型、统一冻结基线、非 root systemd 服务和公网 API 均已跑通。第 2–4 轮候选均因跨包或逐文件安全性失败而拒绝，生产保持不变。发布硬化现已完成：机器可校验 release manifest 锁定生产默认值、14 个 Git 跟踪资产和 1 个外置 encoder；部署脚本默认拒绝缺 encoder 的 SeismicXM 配置，只有显式应急开关才允许 fallback；旧文档和二进制元数据中的机器绝对路径已清理。全量回归为 `282 passed`。下一项最高价值工作是合成缺口屏蔽最小反证，其后处理 watchdog 采集隔离与回滚再前滚演练。
+项目已经从“原型”推进到“可公开服务且有冻结证据链的三任务生产版本”：T1 七成员概率集成、T2/T3 SeismicXM 特征模型、统一冻结基线、非 root systemd 服务和公网 API 均已跑通。第 2–6 轮候选均因跨包、逐文件安全性或必要条件失败而拒绝，生产保持不变。第 6 轮进一步证明 zero-fill 会在物理 gap 10 秒外改变七成员 probability、阈值峰和最终 Pick，最终列表删除与 annotation 局部置零两层固定 guard 都不能修复。当前全量回归为 `317 passed`，发布清单锁定 14 个跟踪资产和 1 个外置 encoder。当前最高价值工作是 watchdog 捕获隔离，其后执行最终回滚/再前滚演练和统一复评。
 
 ## 已核验的生产状态
 
@@ -84,7 +84,7 @@ T1 冻结结果同时报告四种数量罚解释：
 
 统一摄入器原先对所有任务拒绝 `<5s` 波形。第 1 轮官方 T3 实际有 6 个 1.5–3.5 秒的合法第 5 类样本；生产 SeismicXM 离线对六条均分类正确，但旧 API 在模型前返回空表。提交 `53117b9` 已将 5 秒下限保留给 T1/依赖 picks 的模型，对 `needs_picks=False` 的 T2/T3 固定窗模型允许短窗。六个官方文件端到端恢复为类别 5；第 1 轮有效 T3 accuracy 从旧 API 的 91.0% 恢复为 94.0%，第 5 类 recall 从 40% 恢复为 100%。服务器 2 秒隔离烟测和公网健康检查均已通过。
 
-### 2. 第 5 轮最终列表缺口屏蔽已否证，生产仍未接通 gap 规则
+### 2. 第 5/6 轮固定 gap 屏蔽均已否证，生产仍未接通 gap 规则
 
 历史三包 3,894 个已画像文件没有真实 gap，因此本轮只验证未来输入鲁棒性，不能声称历史官方分数提升。读取层仍会记录 `Waveform.gaps` 并零填充，但生产 `picker.py` 没有消费该元数据；这次没有因实验失败而改默认路径。
 
@@ -93,6 +93,14 @@ T1 冻结结果同时报告四种数量罚解释：
 但 R1/R2/固定噪声共 77 个变体产生 `31` 个 induced 和 `36` 个 lost，其中 `13` 个 induced、`2` 个 lost 位于物理 gap 10 秒之外。`margin=0` 只清掉 8/31 个 induced；`margin=10s` 仍留下全部 13 个远程 induced，并误删 37 个稳定 reference picks。没有 active margin，08 波形推理被锁住，`development_pass=false`。
 
 稳定结论：零填充会改变更宽上下文内的概率或条件式 force-pair 结果，所有后处理完成后的删除层无法修复。不得扩大 margin、按文件/相位自适应或把 taper/interpolation 当作同轮补救。若继续研究 gap，作用点必须前移到 annotation/正常阈值/force-pair 之前，并另行预注册；完整证据见 `memory/experiments/005-t1-gap-mask-robustness.md`，结果提交为 `d4a311d`，已推送 GitHub；未部署。
+
+第 6 轮已按上述重开边界把作用点前移到七成员 annotation 平均之后、任何正常阈值和 conditional force-pair 之前。17 篇新的 mask-aware convolution、缺失时序与 blackout imputation 论文形成硬假设：若 gap 10 秒外 raw probability 已改变，局部 annotation veto 逻辑上不能恢复。
+
+实际 77 个冻结变体中，754,070 个远程 P/S 样点有 295,900 个变化超过 `1e-6`，最大绝对差 `0.609977`；出现 745 次正常阈值穿越、3,551 次 `0.03` floor 穿越、normal remote peak `12 induced / 2 lost`、floor remote peak `22 induced / 38 lost`。raw final 精确复现第 5 轮的 `31 induced / 36 lost / 13 remote induced / 2 remote lost`，且第 5/6 轮逐变体数组、区间、reference/raw picks 全部一致。
+
+六档 annotation guard 均不可录取：0 秒为 `33 residual / 40 lost / 0 collateral`，10 秒为 `18 residual / 77 lost / 37 collateral`。结构、五条 annotation→生产 Pick 零差复刻、66 次 no-gap 身份、重复性和 P95 `1.6621 ms` 均通过；拒绝原因是阶段 A 科学必要条件失败。开发选择 `OFF`，08 保持 `records=null`，未改生产、未部署。完整证据见 `memory/experiments/006-t1-gap-aware-annotation.md`，ignored JSON SHA-256 为 `e39c261f61a81d1895c26fc4767d9a3a8ccefc85c8de921d30fa315d6437ada6`。
+
+稳定结论升级为：现有冻结 PhaseNet 对 zero-fill 不具备显式 missingness 语义；不得继续扩大固定 guard、按结果自适应，或在同一零填充输出上叠加 NaN/taper/interpolation。只有真实 gap/独立 gap 包、可冻结 gap augmentation 训练划分、模型层 observation mask，或可验证的滑窗贡献重算机制出现时才重开。
 
 ### 3. T3 中心化/等类轻量头在跨包验证中崩落（已拒绝）
 
@@ -132,8 +140,8 @@ OFF 路径已逐文件和四种完整包口径复现到 `1e-9`。R2 tau 0.35/0.4
 
 ## 下一步顺序
 
-1. 基于第 5 轮远程副作用，独立评估 annotation/正常阈值/force-pair 前的 gap awareness；先用现有 raw annotation 能力做最小反证，不做插值或训练，不使用 08 回选。
-2. 为 watchdog 增加只允许环回探针使用的“不采集”机制与不可由公网伪造的边界测试；完成前继续不安装 cron。
-3. 最终冻结前执行真正的回滚再前滚演练、统一复评和公网复验，并为服务器补齐 GitHub 私有仓库只读发布路径。
+1. 为 watchdog 增加只允许环回探针使用的“不采集”机制与不可由公网伪造的边界测试；完成前继续不安装 cron。
+2. 最终冻结前执行真正的回滚再前滚演练、统一复评和公网复验，并为服务器补齐 GitHub 私有仓库只读发布路径。
+3. gap 方向冻结，不继续固定 guard；只在真实 gap/独立包、可冻结训练数据或模型层显式 mask 到位后重开。
 4. T2 暂不继续 source-only residual、quantile/Huber、双模型平均或相同幅值拼接；只有无标签目标批次、解释偏移的元数据、DiTing/目标区标签或新的独立包出现时重开。
 5. T3 暂不继续 NCM/top-m/中心化网格；只有实质不同的域不变机制、可靠无标签域移信号或新的独立包才重开。
