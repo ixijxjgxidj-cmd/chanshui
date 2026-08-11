@@ -23,6 +23,7 @@
 | T1 长记录 20 秒去重后 FIFO 完整 P/S 事件几何 confidence 删除（tau 0.35/0.40/0.45） | R2 三档最坏归一化增益均为负，最低档 FP `126→87` 却 FN `37→56`；08 tau 0.35 虽四口径总分 `+9.09～+16.09`，仍使 FN `96→116` 并伤害 4/5 个长文件。两包 full/全部 LOFO 均选择 OFF | 开发阶段拒绝；不扩网格、不改生产、不部署 | `memory/experiments/004-t1-long-record-event-confidence.md`；结果 SHA-256 `dc55ae26...5b9d` |
 | T1 所有后处理完成后的最终 Pick 列表固定 gap margin mask（0/0.5/1/2/5/10s） | 77 个 R1/R2/噪声变体产生 31 induced、36 lost，其中 13 induced、2 lost 在 gap 10 秒外；0s 只清 8 个，10s 仍留 13 个远程 induced 且误删 37 个稳定 picks。结构、single/batch、重复性和 P95 2.1463ms 均通过 | 开发阶段拒绝；未运行 08 波形，不改生产、不部署 | `memory/experiments/005-t1-gap-mask-robustness.md`；结果 SHA-256 `8f4cd272...dedc` |
 | T1 七成员 annotation 平均后、阈值/force-pair 前的 P/S gap guard 置零（0/0.5/1/2/5/10s） | 754,070 个远程 P/S 样点中 295,900 个变化超过 `1e-6`，最大差 0.609977；normal/floor 阈值穿越 745/3,551，remote peaks 为 12/2 与 22/38 induced/lost，raw final 精确复现 13/2 remote induced/lost。0s 为 33 residual/40 lost，10s 为 18 residual/77 lost/37 collateral；结构与 P95 1.6621ms 通过 | 阶段 A 拒绝；77/77 probability 条件失败，未运行 08，不改生产、不部署 | `memory/experiments/006-t1-gap-aware-annotation.md`；结果 SHA-256 `e39c261f...7ada6`；提交 `bbf6e45` |
+| T1 现有候选三包四口径稳健重排（`base/cond/fp/g6/g6gate/g7/ov90/prod2`） | 三包 × 四口径共 12 单元；全部候选覆盖完整，但无候选 12 单元全不下降。最佳 `ov90` worst `-6.1500`、mean `-3.0972`、仅 2/12 正向；第 1 轮四口径全降，08 四口径全降 | 拒绝所有候选替换；保持生产 `g7`，不改推理、不部署 | `memory/experiments/010-t1-candidate-robustness-audit.md`；结果 SHA-256 `98353140...0f988`；提交 `79028e0` |
 
 ## 可重新开启的条件
 

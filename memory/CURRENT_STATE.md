@@ -10,7 +10,7 @@
 
 - Git 主分支：`main`。
 - 当前运行发布代码提交：`baa6f77a71519c9e496dc0c27c1f2659de130b7e`；T1/T2/T3 模型和参数仍为已验收七成员/SeismicXM 生产版本，本次新增内容只在发布可靠性层。服务器仓库允许继续快进仅文档提交而不重启服务。
-- 最终复评时本地、GitHub `origin/main` 与服务器仓库的共同基线为 `5d014b4cb7ed1bba363cd3888fb693ecd93bd617`；服务器随后通过仓库级只读 GitHub SSH 发布链以 `fetch` + `merge --ff-only` 快进到 `ed9461a7422bfc58213a455fd9569c32bef12af6`，工作树为空，运行服务没有因这些文档提交重启。
+- 最终复评时本地、GitHub `origin/main` 与服务器仓库的共同基线为 `5d014b4cb7ed1bba363cd3888fb693ecd93bd617`；服务器随后通过仓库级只读 GitHub SSH 发布链持续以 `fetch` + `merge --ff-only` 快进当前 `main`。T1 候选稳健性权威审计绑定 `79028e0cf78d7eedae5b86a8849e237b03babe9d`，运行服务没有因脚本、测试或文档提交重启。
 - 第 4 轮结果 `90ff84f`、发布硬化 `ee2337a`、第 5 轮 gap mask 否证 `d4a311d`、第 6 轮 annotation 否证 `bbf6e45`、watchdog 隔离 `c5153be` 与跨用户日志修复 `baa6f77` 均已推送 GitHub。负实验没有进入生产推理路径。
 - watchdog 服务器双向验收、cron 与真实回滚/再前滚记录提交 `b5f2afb214dde406f6b62d68e1ea2f35e19619e1` 已成功推送到 GitHub `origin/main`；后续状态提交不改变生产推理。
 - 最终统一复评与公网代表样本记录提交 `141d514c4dafb1b3523325cc56337a2a610072f5` 已成功推送到 GitHub `origin/main`；它只增加冻结证据与 memory，不改变生产推理。
@@ -21,7 +21,7 @@
 - 新提交重启后，2 秒三分量线上烟测得到 `/classify={"SMK2":5}`、`/magnitude={"SMK2":4.81}`、`/pick={}`，确认 T2/T3 短窗修复已生效且 T1 保护未回归。
 - 300 请求稳态验收：均值约 42.17 ms，P95 约 44.91 ms，最大约 56.35 ms，RSS 增长约 4 MiB。
 - 发布链最终审计时生产捕获目录与 manifest 均为空；随后观察到 1 条非 probe 的公网 `/pick` 畸形上传（1 个 217 字节项，来源不是 loopback，文件仍完整）。服务器生产环境中的 ObsPy 无法将它解析为 MiniSEED，API 安全返回空对象；该记录保留为接口鲁棒性审计证据，不作为训练样本，也不误删为探针。
-- 最新只读运维复核：公网 `/health` 为 HTTP 200 且 `status=ok`，systemd 没有 failed unit，服务器仓库所在文件系统约有 230 GiB 可用空间。
+- 最新只读运维复核：公网 `/health` 为 HTTP 200 且 `status=ok`，systemd 没有 failed unit，服务器仓库所在文件系统约有 230 GiB 可用空间。服务器候选稳健性审计后完整回归 `352 passed in 4.34s`；临时测试依赖未写入生产 `.venv`，服务仍 active。
 - 服务器已经配置只属于本仓库的只读 GitHub deploy key；私钥只保留在服务器且权限为 `0600`。仓库本地 SSH 命令固定 `IdentitiesOnly=yes` 与严格主机校验，GitHub 主机公钥来自官方 metadata API。`ls-remote`、`fetch`、`merge --ff-only` 均已通过，写入 dry-run 被 GitHub 拒绝，服务器远端只保留 GitHub。
 - watchdog 捕获隔离已部署并完成双向验收：只有“直接数值型 loopback 对端 + 0600 文件中的随机 token”同时满足才跳过采集；代理头不参与授权，服务还必须返回 accepted。Linux 专用测试 `26 passed`；认证回环、手动 watchdog 和真实 cron 的捕获增量均为 `0`，公网伪造 token/代理头仍恰好产生 `1` 条捕获并已精确清理。
 - `deploy/production_release_manifest.json` 已成为生产资产、参数和 fallback 策略的机器可校验清单；`scripts/verify_release_manifest.py --require-external` 已对本地 14 个跟踪资产和外置 SeismicXM encoder 全绿。
@@ -143,14 +143,22 @@ OFF 路径已逐文件和四种完整包口径复现到 `1e-9`。R2 tau 0.35/0.4
 
 审计器用合成密集反例检出精确匹配比贪心高 `0.1111111111`，证明检查不是恒等比较，也说明贪心并非数学上普遍等价。因此当前三包冻结分数不受此实现近似影响，但官方若给出新密集分布或明确匹配算法，仍必须重新审计；详见 `memory/experiments/009-t1-matching-sensitivity-audit.md`。
 
-### 8. 训练谱系不完整
+### 8. 所有已有 T1 候选均未通过三包四口径稳健替换
+
+提交 `79028e0cf78d7eedae5b86a8849e237b03babe9d` 增加统一候选审计器，复用 `score_file/exam_total_score` 对 `base/cond/fp/g6/g6gate/g7/ov90/prod2` 的三包预测执行四种数量罚重排。八组预测在第 1 轮 1,000 个、第 2 轮 915 个、08 784 个文件上覆盖均完整；`g7` 四口径均分逐位复现冻结计分板。
+
+除 `g7` 外 7 个候选均未满足“12 单元全部不下降且至少一个严格上升”。最佳 `ov90` 的最差完整包总分差为 `-6.150000000001`，12 单元均值为 `-3.097222222223`，只有第 2 轮两种卷级口径各约 `+0.8611`；第 1 轮和 08 四口径全部下降，默认口径三包合计 467 个文件受损。服务器权威 JSON SHA-256 为 `98353140ad1f0958d2caab60aa92c4ec8e1bf229b0085cead2cb838da140f988`。
+
+稳定结论：继续冻结生产 `g7`，不得从这些同一批历史输出中事后挑包、挑口径或重排后声称提升。只有新独立数据、官方规则实质变化，或完全不同且预注册后 12 单元全不下降的新候选才能重开；详见 `memory/experiments/010-t1-candidate-robustness-audit.md`。
+
+### 9. 训练谱系不完整
 
 `geofon_m3` 缺精确训练配方；`geofon_m1` 无真实留出。它们可作为已冻结发布资产继续使用，但在补齐谱系前不能宣称完全可重训。
 
 ## 下一步顺序
 
 1. 比赛窗口前核对平台登记 URL、cron 最近一次 OK、生产捕获与磁盘余量；不自行修改平台登记。
-2. 当前模型与参数冻结；除非出现新的独立数据、官方规则变化或可复现的高收益证据，不再修改生产推理。
+2. 当前模型与参数冻结；已有 7 个替代候选已全部通过三包四口径审计否证。除非出现新的独立数据、官方规则变化或实质不同且可复现的高收益证据，不再修改生产推理。
 3. gap 方向冻结，不继续固定 guard；只在真实 gap/独立包、可冻结训练数据或模型层显式 mask 到位后重开。
 4. T2 暂不继续 source-only residual、quantile/Huber、双模型平均或相同幅值拼接；只有无标签目标批次、解释偏移的元数据、DiTing/目标区标签或新的独立包出现时重开。
 5. T3 暂不继续 NCM/top-m/中心化网格；只有实质不同的域不变机制、可靠无标签域移信号或新的独立包才重开。
