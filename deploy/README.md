@@ -31,7 +31,7 @@ GitHub 只读 deploy key（推荐）或其他 GitHub 凭据；没有凭据时可
 脚本做的事：装 venv 依赖（**版本按 `deploy/requirements.lock` 锁定**，torch 优先
   CPU 轮子）→ 从 `weights/*.tar.gz` 恢复 seisbench 权重缓存（**不走跨境下载**）→
   校验生产默认值、14 个跟踪资产与外置 encoder → 装 systemd 服务（开机自启 +
-  崩溃自拉起 + 内存护栏）→ 健康检查（最长 180s，
+  崩溃自拉起 + 内存护栏）→ 生成/复用 0600 watchdog 回环探针令牌 → 健康检查（最长 180s，
 慢云机首启加载权重较久）→ 合成波形跑 `check_api.py` 官方格式自检。
 
 完成后**必须手工做**的四件事：
@@ -75,7 +75,7 @@ diting 起步。注意 diting 模型原生 50Hz、窗长 60.02s——短于一�
 journalctl -u phasepick-api -f          # 看日志
 systemctl restart phasepick-api         # 重启
 curl http://127.0.0.1:8000/health       # 健康检查（静态返回，判活别只看它）
-bash deploy/watchdog.sh                 # 真实波形探活（评测日 cron 每 5 分钟跑，见 EVAL_DAY.md）
+bash deploy/watchdog.sh                 # 认证回环真实波形探活；不污染 captured/
 ```
 
 换微调权重 / 换阈值（P2 产出 best.pt、P3 搜出阈值后，带环境变量重跑脚本即可，

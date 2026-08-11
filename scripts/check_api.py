@@ -25,6 +25,19 @@ import statistics
 import sys
 import zipfile
 from typing import Iterable, List, Tuple
+from urllib.parse import urlsplit
+
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "src"))
+
+from phasepicker.probe_auth import (  # noqa: E402
+    PROBE_ACCEPTED_HEADER,
+    PROBE_ACCEPTED_VALUE,
+    PROBE_TOKEN_HEADER,
+    is_loopback_host,
+    load_probe_token_file,
+)
 
 _ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$")
 
@@ -106,7 +119,29 @@ def main(argv=None) -> int:
     ap.add_argument("--input", required=True, help="mseed 目录 / zip / 单文件")
     ap.add_argument("--limit", type=int, default=None, help="只测前 N 个文件")
     ap.add_argument("--timeout", type=float, default=120.0)
+    ap.add_argument(
+        "--probe-token-file",
+        default=None,
+        help="从文件读取 watchdog 令牌；发送回环探针 header，并要求服务确认 accepted",
+    )
     args = ap.parse_args(argv)
+
+    request_headers = None
+    if args.probe_token_file:
+        parsed_url = urlsplit(args.url)
+        if parsed_url.scheme not in {"http", "https"} or not is_loopback_host(
+            parsed_url.hostname
+        ):
+            raise SystemExit(
+                "--probe-token-file 只允许与数值型 IPv4/IPv6 loopback URL 一起使用"
+            )
+        try:
+            token = load_probe_token_file(
+                args.probe_token_file, require_private=False
+            )
+        except ValueError as exc:
+            raise SystemExit(f"watchdog probe token 配置无效：{exc}") from exc
+        request_headers = {PROBE_TOKEN_HEADER: token}
 
     try:
         import requests
@@ -126,7 +161,10 @@ def main(argv=None) -> int:
         t0 = time.perf_counter()
         try:
             resp = requests.post(
-                args.url, files={"file": (name, raw)}, timeout=args.timeout
+                args.url,
+                files={"file": (name, raw)},
+                timeout=args.timeout,
+                headers=request_headers,
             )
         except Exception as exc:  # noqa: BLE001
             print(f"[FAIL] {name}: 请求异常 {exc!r}")
@@ -137,6 +175,12 @@ def main(argv=None) -> int:
 
         if resp.status_code != 200:
             print(f"[FAIL] {name}: HTTP {resp.status_code}（应为 200）")
+            n_fail += 1
+            continue
+        if args.probe_token_file and (
+            resp.headers.get(PROBE_ACCEPTED_HEADER) != PROBE_ACCEPTED_VALUE
+        ):
+            print(f"[FAIL] {name}: 服务未确认 authenticated loopback probe")
             n_fail += 1
             continue
         try:

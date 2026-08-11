@@ -4,7 +4,7 @@
 
 ## 一句话结论
 
-项目已经从“原型”推进到“可公开服务且有冻结证据链的三任务生产版本”：T1 七成员概率集成、T2/T3 SeismicXM 特征模型、统一冻结基线、非 root systemd 服务和公网 API 均已跑通。第 2–6 轮候选均因跨包、逐文件安全性或必要条件失败而拒绝，生产保持不变。第 6 轮进一步证明 zero-fill 会在物理 gap 10 秒外改变七成员 probability、阈值峰和最终 Pick，最终列表删除与 annotation 局部置零两层固定 guard 都不能修复。当前全量回归为 `317 passed`，发布清单锁定 14 个跟踪资产和 1 个外置 encoder。当前最高价值工作是 watchdog 捕获隔离，其后执行最终回滚/再前滚演练和统一复评。
+项目已经从“原型”推进到“可公开服务且有冻结证据链的三任务生产版本”：T1 七成员概率集成、T2/T3 SeismicXM 特征模型、统一冻结基线、非 root systemd 服务和公网 API 均已跑通。第 2–6 轮候选均因跨包、逐文件安全性或必要条件失败而拒绝，生产保持不变。第 6 轮进一步证明 zero-fill 会在物理 gap 10 秒外改变七成员 probability、阈值峰和最终 Pick，最终列表删除与 annotation 局部置零两层固定 guard 都不能修复。当前全量回归为 `342 passed, 1 skipped`，发布清单锁定 14 个跟踪资产和 1 个外置 encoder。当前最高价值工作是完成 watchdog 捕获隔离的服务器双向验收，其后执行最终回滚/再前滚演练和统一复评。
 
 ## 已核验的生产状态
 
@@ -19,7 +19,7 @@
 - 300 请求稳态验收：均值约 42.17 ms，P95 约 44.91 ms，最大约 56.35 ms，RSS 增长约 4 MiB。
 - 生产捕获目录在验收后为空；测试流量已与正式捕获隔离。
 - 服务器尚未配置 GitHub 只读 deploy key，因此不能直接拉取私有仓库；这不影响当前服务，但影响后续发布自动化。
-- watchdog cron 暂未安装：当前真实 `/pick` 探针会进入捕获目录，每天制造约 288 个探针样本。实现仅环回可用的“不捕获探针”机制前不启用。
+- watchdog 捕获隔离已完成本地实现：只有“直接数值型 loopback 对端 + 0600 文件中的随机 token”同时满足才跳过采集；代理头不参与授权，服务还必须返回 accepted header。专用边界测试 `25 passed, 1 skipped`（Windows 无符号链接权限时跳过该平台项）、全量 `342 passed, 1 skipped`、Bash 语法和发布清单均通过；服务器双向验收及 cron 安装尚未执行。
 - `deploy/production_release_manifest.json` 已成为生产资产、参数和 fallback 策略的机器可校验清单；`scripts/verify_release_manifest.py --require-external` 已对本地 14 个跟踪资产和外置 SeismicXM encoder 全绿。
 - `deploy/deploy_api.sh` 会在写 unit/重启服务之前运行发布校验。默认 `ALLOW_MODEL_FALLBACK=0`；缺少默认 SeismicXM encoder 时中止，只有显式设为 `1` 才允许 baseline 降级，已存在但哈希错误的 encoder 无条件拒绝。
 - 本轮只增强发布可靠性、文档和产物元数据，没有改变当前 T1/T2/T3 默认推理行为，因此稳定服务器未同步、未重启；专用密钥直连与服务 `active` 状态已再次只读核验。
@@ -140,7 +140,7 @@ OFF 路径已逐文件和四种完整包口径复现到 `1e-9`。R2 tau 0.35/0.4
 
 ## 下一步顺序
 
-1. 为 watchdog 增加只允许环回探针使用的“不采集”机制与不可由公网伪造的边界测试；完成前继续不安装 cron。
+1. 提交并推送 watchdog 捕获隔离；服务器部署后验证本机认证探针不新增捕获、公网伪造 header 仍被捕获，再安装 5 分钟 cron。
 2. 最终冻结前执行真正的回滚再前滚演练、统一复评和公网复验，并为服务器补齐 GitHub 私有仓库只读发布路径。
 3. gap 方向冻结，不继续固定 guard；只在真实 gap/独立包、可冻结训练数据或模型层显式 mask 到位后重开。
 4. T2 暂不继续 source-only residual、quantile/Huber、双模型平均或相同幅值拼接；只有无标签目标批次、解释偏移的元数据、DiTing/目标区标签或新的独立包出现时重开。

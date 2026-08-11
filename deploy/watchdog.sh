@@ -17,6 +17,8 @@
 #   SERVICE=phasepick-api            # systemd 服务名
 #   WEBHOOK_URL=                     # 钉钉/企微机器人 webhook，留空只写日志
 #   TIMEOUT=90                       # 单次探测超时秒数
+#   PROBE_TOKEN_FILE=<路径>          # 默认 <repo>/.runtime/watchdog_probe_token；
+#                                    # 缺失时 fail closed，不发送会污染 captured/ 的请求
 # =============================================================================
 set -u
 
@@ -26,8 +28,29 @@ URL="${URL:-http://127.0.0.1:8000/pick}"
 SERVICE="${SERVICE:-phasepick-api}"
 SAMPLE_DIR="${SAMPLE_DIR:-$REPO_ROOT/probe_sample}"
 TIMEOUT="${TIMEOUT:-90}"
+PROBE_TOKEN_FILE="${PROBE_TOKEN_FILE:-$REPO_ROOT/.runtime/watchdog_probe_token}"
 PY="$REPO_ROOT/.venv/bin/python"
 [ -x "$PY" ] || PY=python3
+
+if [ ! -r "$PROBE_TOKEN_FILE" ]; then
+  echo "$(date '+%F %T') FAIL —— watchdog probe token 文件缺失或不可读；拒绝发送会污染采集的降级请求"
+  exit 2
+fi
+if ! PYTHONPATH="$REPO_ROOT/src" "$PY" - "$URL" "$PROBE_TOKEN_FILE" <<'PYEOF'
+import sys
+from urllib.parse import urlsplit
+
+from phasepicker.probe_auth import is_loopback_host, load_probe_token_file
+
+url = urlsplit(sys.argv[1])
+if url.scheme not in {"http", "https"} or not is_loopback_host(url.hostname):
+    raise SystemExit("watchdog URL 必须使用数值型 IPv4/IPv6 loopback 地址")
+load_probe_token_file(sys.argv[2], require_private=True)
+PYEOF
+then
+  echo "$(date '+%F %T') FAIL —— watchdog URL/令牌安全校验失败"
+  exit 2
+fi
 
 mkdir -p "$SAMPLE_DIR"
 if ! ls "$SAMPLE_DIR"/*.mseed >/dev/null 2>&1; then
@@ -47,6 +70,7 @@ fi
 
 if PYTHONUTF8=1 "$PY" "$REPO_ROOT/scripts/check_api.py" \
     --url "$URL" --input "$SAMPLE_DIR" --limit 1 --timeout "$TIMEOUT" \
+    --probe-token-file "$PROBE_TOKEN_FILE" \
     > /tmp/phasepick_watchdog_last.log 2>&1; then
   echo "$(date '+%F %T') OK"
   exit 0

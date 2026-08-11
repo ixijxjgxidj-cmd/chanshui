@@ -79,6 +79,8 @@ SERVICE_HOME="${SERVICE_HOME:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROBE_TOKEN_DIR="$REPO_ROOT/.runtime"
+PROBE_TOKEN_FILE="$PROBE_TOKEN_DIR/watchdog_probe_token"
 VENV="$REPO_ROOT/.venv"
 CACHE="$REPO_ROOT/.seisbench_cache"
 PY="$VENV/bin/python"
@@ -184,12 +186,33 @@ PYTHONUTF8=1 "$PY" "$REPO_ROOT/scripts/verify_release_manifest.py" \
   "${VERIFY_ARGS[@]}"
 
 echo "==================== [4/6] 安装服务 ===================="
+# watchdog skip-capture 使用运行时随机令牌；只把文件路径放进进程参数，令牌内容
+# 不进仓库、unit、命令行或日志。已存在的令牌保持不变，避免每次幂等部署失配。
+mkdir -p "$PROBE_TOKEN_DIR"
+chmod 700 "$PROBE_TOKEN_DIR"
+if [ -L "$PROBE_TOKEN_FILE" ]; then
+  echo "!! watchdog probe token 不允许使用符号链接"
+  exit 1
+fi
+if [ ! -e "$PROBE_TOKEN_FILE" ]; then
+  (umask 077; "$PY" -c 'import secrets; print(secrets.token_urlsafe(48))' > "$PROBE_TOKEN_FILE")
+fi
+chmod 600 "$PROBE_TOKEN_FILE"
+PYTHONPATH="$REPO_ROOT/src" "$PY" - "$PROBE_TOKEN_FILE" <<'PYEOF'
+import sys
+from phasepicker.probe_auth import load_probe_token_file
+
+load_probe_token_file(sys.argv[1], require_private=True)
+print("watchdog 回环探针令牌文件已就绪（内容不输出）")
+PYEOF
+
 EXTRA_ARGS=" --weights $WEIGHTS"
 EXTRA_ARGS="$EXTRA_ARGS --cap-short-s $CAP_SHORT_S --cap-max-p $CAP_MAX_P --cap-max-s $CAP_MAX_S"
 EXTRA_ARGS="$EXTRA_ARGS --long-snr-db $LONG_SNR_DB --long-snr-min-s $LONG_SNR_MIN_S"
 EXTRA_ARGS="$EXTRA_ARGS --force-pair-short-s $FORCE_PAIR_SHORT_S --force-pair-mode $FORCE_PAIR_MODE --force-pair-floor $FORCE_PAIR_FLOOR"
 EXTRA_ARGS="$EXTRA_ARGS --long-dedup-s $LONG_DEDUP_S --ensemble-long-members $ENSEMBLE_LONG_MEMBERS"
 EXTRA_ARGS="$EXTRA_ARGS --mag-model $MAG_MODEL --cls-model $CLS_MODEL"
+EXTRA_ARGS="$EXTRA_ARGS --probe-token-file $PROBE_TOKEN_FILE"
 [ -n "$P_THRESHOLD" ] && EXTRA_ARGS="$EXTRA_ARGS --p-threshold $P_THRESHOLD"
 [ -n "$S_THRESHOLD" ] && EXTRA_ARGS="$EXTRA_ARGS --s-threshold $S_THRESHOLD"
 [ -n "$P_MERGE_WINDOW" ] && EXTRA_ARGS="$EXTRA_ARGS --p-merge-window $P_MERGE_WINDOW"
@@ -251,6 +274,10 @@ if command -v systemctl >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
   if [ "$CAPTURE_DIR" != "off" ]; then
     chown -R "$SERVICE_USER:$SERVICE_GROUP" "$CAPTURE_DIR"
   fi
+  chown "$SERVICE_USER:$SERVICE_GROUP" "$PROBE_TOKEN_DIR"
+  chown "$SERVICE_USER:$SERVICE_GROUP" "$PROBE_TOKEN_FILE"
+  chmod 700 "$PROBE_TOKEN_DIR"
+  chmod 600 "$PROBE_TOKEN_FILE"
 
   cat > /etc/systemd/system/phasepick-api.service <<UNIT
 [Unit]
@@ -338,7 +365,8 @@ for comp in "ENZ":
 st.write("$SMOKE_DIR/smoke.mseed", format="MSEED")
 PYEOF
 PYTHONUTF8=1 "$PY" "$REPO_ROOT/scripts/check_api.py" \
-  --url "http://127.0.0.1:$PORT/pick" --input "$SMOKE_DIR"
+  --url "http://127.0.0.1:$PORT/pick" --input "$SMOKE_DIR" \
+  --probe-token-file "$PROBE_TOKEN_FILE"
 rm -rf "$SMOKE_DIR"
 
 PUB_IP="$(curl -sf -m 3 https://myip.ipip.net 2>/dev/null || curl -sf -m 3 ifconfig.me 2>/dev/null || echo '<公网IP>')"

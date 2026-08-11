@@ -80,11 +80,12 @@ tmux ls                 # 看有哪些会话
 systemd 不拉起、/health 依旧绿。**判活必须用真实波形打 /pick**，这正是
 `deploy/watchdog.sh` 做的事（失败自动 `systemctl restart` + webhook 告警）。
 
-> **采集注意：**生产服务默认启用 `--capture-dir`，所以 watchdog 每 5 分钟的真实
-> `/pick` 探活也会进入 `captured/`（一天约 288 条）。2026-08-11 当前服务器尚未安装
-> 该 cron。安装前二选一：接受这些记录并在训练数据整理时按 `client_ip=127.0.0.1`
-> / 固定探针文件名过滤；或先让服务支持“仅本机探活可跳过采集”的专用标记。不要把
-> 探针记录误当成比赛评测数据。
+> **采集隔离：**部署脚本会在 `.runtime/watchdog_probe_token` 生成 0600 随机令牌。
+> watchdog 只向数值型 loopback URL 发送该令牌；API 只有在“直接 TCP 对端是
+> `127.0.0.0/8` 或 `::1`”且令牌恒定时间匹配时才跳过采集，并回
+> `X-PhasePicker-Probe: accepted`。watchdog 收不到该确认会 fail closed，不会静默制造
+> 探针样本。`X-Forwarded-For` / `X-Real-IP` 只用于 manifest 元数据，永不参与授权；
+> 公网伪造同名 header 仍会正常进入 `captured/`。
 
 ```bash
 # 1) 放一条去年真题 mseed 当探测样例（不放也行，watchdog 会自动生成合成波形兜底）
@@ -92,6 +93,9 @@ mkdir -p $REPO/probe_sample && scp <本地某条真题.mseed> <SSH用户>@<公�
 
 # 2) 手动跑一次确认 OK
 bash $REPO/deploy/watchdog.sh
+
+# 可选但推荐：运行前后比较捕获文件数，应完全不变
+find "$REPO/captured" -type f 2>/dev/null | wc -l
 
 # 3) 装 cron（WEBHOOK_URL 填钉钉/企微机器人地址，留空=只写日志不告警）
 crontab -e

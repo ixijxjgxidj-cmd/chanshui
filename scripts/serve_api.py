@@ -65,6 +65,13 @@ from phasepicker.defaults import (  # noqa: E402
     DEFAULT_S_MERGE_WINDOW_S,
     DEFAULT_S_THRESHOLD,
 )
+from phasepicker.probe_auth import (  # noqa: E402
+    PROBE_ACCEPTED_HEADER,
+    PROBE_ACCEPTED_VALUE,
+    PROBE_TOKEN_HEADER,
+    is_trusted_probe,
+    load_probe_token_file,
+)
 from phasepicker.types import PhaseType, Pick, Waveform  # noqa: E402
 
 
@@ -167,6 +174,19 @@ def client_ip_of(request) -> Optional[str]:
         return xr.strip()
     client = getattr(request, "client", None)
     return getattr(client, "host", None) if client else None
+
+
+def trusted_probe_of(request, expected_token: Optional[str]) -> bool:
+    """Authorize capture bypass from the direct socket peer, never proxy headers."""
+
+    client = getattr(request, "client", None)
+    peer_host = getattr(client, "host", None) if client else None
+    supplied = request.headers.get(PROBE_TOKEN_HEADER)
+    return is_trusted_probe(
+        peer_host=peer_host,
+        supplied_token=supplied,
+        expected_token=expected_token,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -559,7 +579,12 @@ def build_engine(args) -> Engine:
 # ---------------------------------------------------------------------------
 # FastAPI 应用
 # ---------------------------------------------------------------------------
-def create_app(engine: Engine, extra_route: Optional[str] = None, capture_dir: Optional[str] = None):
+def create_app(
+    engine: Engine,
+    extra_route: Optional[str] = None,
+    capture_dir: Optional[str] = None,
+    probe_token: Optional[str] = None,
+):
     if _FASTAPI_IMPORT_ERROR is not None:  # pragma: no cover
         raise SystemExit(
             f"API 服务需要 FastAPI：{_FASTAPI_IMPORT_ERROR!r}\n"
@@ -639,16 +664,30 @@ def create_app(engine: Engine, extra_route: Optional[str] = None, capture_dir: O
             return [], JSONResponse(content={})
         return payloads, None
 
-    def _capture_bg(endpoint, payloads, response_obj, elapsed_ms, client_ip=None):
+    def _capture_bg(
+        endpoint,
+        payloads,
+        response_obj,
+        elapsed_ms,
+        client_ip=None,
+        skip_capture=False,
+    ):
         """采集开着才挂后台任务；响应先发、落盘在后——评测方零延迟感知。"""
-        if not capture_dir:
+        if not capture_dir or skip_capture:
             return None
         return BackgroundTask(
             capture_save, capture_dir, endpoint, payloads, response_obj, elapsed_ms, client_ip
         )
 
+    def _response_headers(elapsed_ms: float, trusted_probe: bool) -> dict[str, str]:
+        headers = {"X-Process-Time-Ms": f"{elapsed_ms:.1f}"}
+        if trusted_probe:
+            headers[PROBE_ACCEPTED_HEADER] = PROBE_ACCEPTED_VALUE
+        return headers
+
     async def _handle(request: Request):
         t0 = time.perf_counter()
+        trusted_probe = trusted_probe_of(request, probe_token)
         payloads, early = await _extract_payloads(request)
         if early is not None:
             return early
@@ -673,12 +712,20 @@ def create_app(engine: Engine, extra_route: Optional[str] = None, capture_dir: O
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         return JSONResponse(
             content=merged,
-            headers={"X-Process-Time-Ms": f"{elapsed_ms:.1f}"},
-            background=_capture_bg("pick", payloads, merged, elapsed_ms, client_ip_of(request)),
+            headers=_response_headers(elapsed_ms, trusted_probe),
+            background=_capture_bg(
+                "pick",
+                payloads,
+                merged,
+                elapsed_ms,
+                client_ip_of(request),
+                skip_capture=trusted_probe,
+            ),
         )
 
     async def _handle_mag(request: Request):
         t0 = time.perf_counter()
+        trusted_probe = trusted_probe_of(request, probe_token)
         if not engine.has_magnitude:
             return JSONResponse(
                 status_code=501,
@@ -705,12 +752,20 @@ def create_app(engine: Engine, extra_route: Optional[str] = None, capture_dir: O
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         return JSONResponse(
             content=merged,
-            headers={"X-Process-Time-Ms": f"{elapsed_ms:.1f}"},
-            background=_capture_bg("magnitude", payloads, merged, elapsed_ms, client_ip_of(request)),
+            headers=_response_headers(elapsed_ms, trusted_probe),
+            background=_capture_bg(
+                "magnitude",
+                payloads,
+                merged,
+                elapsed_ms,
+                client_ip_of(request),
+                skip_capture=trusted_probe,
+            ),
         )
 
     async def _handle_cls(request: Request):
         t0 = time.perf_counter()
+        trusted_probe = trusted_probe_of(request, probe_token)
         if not engine.has_classify:
             return JSONResponse(
                 status_code=501,
@@ -740,8 +795,15 @@ def create_app(engine: Engine, extra_route: Optional[str] = None, capture_dir: O
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         return JSONResponse(
             content=merged,
-            headers={"X-Process-Time-Ms": f"{elapsed_ms:.1f}"},
-            background=_capture_bg("classify", payloads, merged, elapsed_ms, client_ip_of(request)),
+            headers=_response_headers(elapsed_ms, trusted_probe),
+            background=_capture_bg(
+                "classify",
+                payloads,
+                merged,
+                elapsed_ms,
+                client_ip_of(request),
+                skip_capture=trusted_probe,
+            ),
         )
 
     # 报名时登记哪个路径都行：/、/pick、/predict 三个入口等价；
@@ -858,6 +920,12 @@ def make_arg_parser() -> argparse.ArgumentParser:
                          "（响应发回后的后台任务写盘，评测方零延迟感知；磁盘余量"
                          "<2GB 自动停采；存储异常绝不影响服务）。默认关闭；"
                          "deploy_api.sh 默认开到 <仓库>/captured")
+    ap.add_argument(
+        "--probe-token-file",
+        default=None,
+        help="watchdog 回环探针令牌文件；只有直接 TCP 对端为 loopback 且令牌匹配时"
+        "才跳过采集。文件必须为 0600、令牌至少 32 字符；默认关闭此能力",
+    )
     ap.add_argument("--no-warmup", action="store_true")
     return ap
 
@@ -865,15 +933,31 @@ def make_arg_parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     args = make_arg_parser().parse_args(argv)
 
+    probe_token = None
+    if args.probe_token_file:
+        try:
+            probe_token = load_probe_token_file(
+                args.probe_token_file, require_private=True
+            )
+        except ValueError as exc:
+            raise SystemExit(f"watchdog probe token 配置无效：{exc}") from exc
+
     print("加载模型 …", flush=True)
     engine = build_engine(args)
     if not args.no_warmup:
         dt = engine.warmup()
         print(f"预热完成（{dt*1000:.0f}ms）")
 
-    app = create_app(engine, extra_route=args.route, capture_dir=args.capture_dir)
+    app = create_app(
+        engine,
+        extra_route=args.route,
+        capture_dir=args.capture_dir,
+        probe_token=probe_token,
+    )
     if args.capture_dir:
         print(f"请求采集已开启 -> {args.capture_dir}（后台落盘，不影响响应延迟）")
+    if probe_token:
+        print("watchdog 回环探针捕获隔离已启用（令牌内容不写日志）")
     try:
         import uvicorn
     except ImportError:

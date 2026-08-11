@@ -31,6 +31,7 @@ serve_api_supervisor.sh
 *.pid
 probe_sample/
 captured/
+.runtime/
 
 *.csv
 /content/ethz_100hz_subset.hdf5
