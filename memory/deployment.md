@@ -4,8 +4,8 @@
 
 ## 当前状态
 
-- 当前服务器仓库与运行发布提交：`baa6f77a71519c9e496dc0c27c1f2659de130b7e`。该提交只修复 watchdog 跨用户临时日志；T1/T2/T3 推理模型与参数仍是已验收的七成员/SeismicXM 版本。
-- 服务器通过核验 SHA-256 的增量 Git bundle 严格 fast-forward；当前分支为 `main`、工作树干净，未依赖服务器直接读取私有 GitHub。
+- 当前运行发布代码提交：`baa6f77a71519c9e496dc0c27c1f2659de130b7e`。该提交只修复 watchdog 跨用户临时日志；T1/T2/T3 推理模型与参数仍是已验收的七成员/SeismicXM 版本。
+- 服务器仓库通过核验 SHA-256 的增量 Git bundle 严格 fast-forward；分支保持 `main`、工作树干净，未依赖服务器直接读取私有 GitHub。仅文档快进不需要重启服务。
 - 服务：系统级 `phasepick-api.service`，已启用并正在运行。
 - 运行身份：非 root 普通用户。
 - 工作目录：服务器仓库目录；启动命令显式包含七成员、后处理参数及 T2/T3 模型选择。
@@ -45,6 +45,8 @@
   token 仍以 `0600` 保留且旧 unit 不使用。三个回滚请求形成的捕获均精确归档并清空。
   再前滚后复用原 token、恢复 probe unit 与唯一 root cron；四端点、手动 watchdog 和真实
   定时触发再次全绿。
+- 上述服务器双向验收、cron 与回滚/再前滚记录提交
+  `b5f2afb214dde406f6b62d68e1ea2f35e19619e1` 已成功推送到 GitHub `origin/main`。
 - 服务器 `.runtime` 中保留旧/新 unit、提交、root crontab及合成验收样本的回滚审计副本；
   这些运行时文件不进入 Git。最终服务 active、enabled，生产捕获为空。
 
