@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前运行发布代码提交：`baa6f77a71519c9e496dc0c27c1f2659de130b7e`。该提交只修复 watchdog 跨用户临时日志；T1/T2/T3 推理模型与参数仍是已验收的七成员/SeismicXM 版本。
-- 服务器仓库通过核验 SHA-256 的增量 Git bundle 保持 `main` 与 GitHub `origin/main` 严格 fast-forward；最终复评共同基线为 `5d014b4cb7ed1bba363cd3888fb693ecd93bd617`，工作树干净，尚未依赖服务器直接读取私有 GitHub。后续验收记录只同步文档，服务启动时间早于 Git 快进且不重启。
+- 服务器仓库已经改用仓库级只读 GitHub SSH 发布链；最终复评共同基线 `5d014b4cb7ed1bba363cd3888fb693ecd93bd617` 已通过 `fetch` + `merge --ff-only` 快进到 `ed9461a7422bfc58213a455fd9569c32bef12af6`。工作树干净，后续验收记录只同步文档，服务启动时间早于 Git 快进且未重启。
 - 服务：系统级 `phasepick-api.service`，已启用并正在运行。
 - 运行身份：非 root 普通用户。
 - 工作目录：服务器仓库目录；启动命令显式包含七成员、后处理参数及 T2/T3 模型选择。
@@ -68,6 +68,14 @@
 - 本节冻结证据提交 `141d514c4dafb1b3523325cc56337a2a610072f5` 已成功推送到
   GitHub `origin/main`；后续状态提交同样不需要重启服务。
 
+## 2026-08-11 GitHub 仓库级只读发布链
+
+- GitHub 仓库已登记一枚仅属于该仓库、不可写的 deploy key；私钥只保留在服务器，模式为 `0600`，没有部署个人写权限凭据。
+- 服务器默认 `known_hosts` 保留原内容并加入 GitHub 官方 metadata API 返回的 SSH 主机公钥；仓库本地 SSH 配置固定 `IdentitiesOnly=yes` 与 `StrictHostKeyChecking=yes`，没有关闭主机身份校验，也不影响同一用户的其他仓库。
+- 服务器仓库唯一远端已改为 GitHub SSH 地址，不含 Gitee 或 HTTPS 写权限凭据。`git ls-remote origin refs/heads/main` 返回 GitHub `main` 的目标哈希；一次非真实写入的 push dry-run 被拒绝，证明该 deploy key 不具备仓库写权限。
+- 服务器先通过这条路径执行 `fetch` 与 `merge --ff-only`，从 `5d014b4cb7ed1bba363cd3888fb693ecd93bd617` 快进到 `ed9461a7422bfc58213a455fd9569c32bef12af6`；没有使用 `reset --hard`。本记录提交推送后将再次通过同一路径纯快进，作为最终发布链实测。
+- 上述快进只包含冻结证据和文档；systemd 主进程与启动时间均保持不变，生产服务没有重启。
+
 ## 性能验收
 
 - 300 请求连续压测通过。
@@ -87,14 +95,13 @@
 
 ## 已知运维缺口
 
-1. 服务器暂不能直接拉取私有 GitHub 仓库。后续配置只读 deploy key；不得把个人写权限密钥部署到服务器。
-2. 比赛平台各任务 URL 仍需由用户按最终窗口核对/登记；本次没有修改平台配置。
+1. 比赛平台各任务 URL 仍需由用户按最终窗口核对/登记；本次没有修改平台配置。
 
 ## 每次发布的最低检查
 
 1. 本地工作区干净；提交已推送 GitHub。
 2. 全量测试通过，部署脚本语法检查通过；运行 `verify_release_manifest.py --require-external` 全绿。
-3. 服务器仓库提交与目标提交一致，且无未跟踪业务文件污染。
+3. 服务器使用仓库级只读 GitHub deploy key，`ls-remote` 成功；只允许 `fetch` 后 `merge --ff-only`，服务器仓库提交与目标提交一致且无未跟踪业务文件污染。
 4. release manifest 中全部 14 个跟踪资产和外置 SeismicXM encoder 的大小、SHA-256 全部一致。
 5. systemd unit 运行账户非 root；`active`、`enabled`。
 6. 本机回环 `/health` 与公网 `/health` 成功。
