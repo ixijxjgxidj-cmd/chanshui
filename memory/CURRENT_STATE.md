@@ -13,6 +13,7 @@
 - 最终复评时本地、GitHub `origin/main` 与服务器仓库的共同基线为 `5d014b4cb7ed1bba363cd3888fb693ecd93bd617`，工作树均为空；此后的验收记录也只做 Git 快进，不改变运行代码或触发服务重启。
 - 第 4 轮结果 `90ff84f`、发布硬化 `ee2337a`、第 5 轮 gap mask 否证 `d4a311d`、第 6 轮 annotation 否证 `bbf6e45`、watchdog 隔离 `c5153be` 与跨用户日志修复 `baa6f77` 均已推送 GitHub。负实验没有进入生产推理路径。
 - watchdog 服务器双向验收、cron 与真实回滚/再前滚记录提交 `b5f2afb214dde406f6b62d68e1ea2f35e19619e1` 已成功推送到 GitHub `origin/main`；后续状态提交不改变生产推理。
+- 最终统一复评与公网代表样本记录提交 `141d514c4dafb1b3523325cc56337a2a610072f5` 已成功推送到 GitHub `origin/main`；它只增加冻结证据与 memory，不改变生产推理。
 - 唯一远端：`https://github.com/ixijxjgxidj-cmd/dizheng-gpt5.6-sol.git`。
 - 上次核验时服务器工作区干净；新的专用 SSH 密钥已通过 `BatchMode` 直连验证，备用代理未使用。凭据本身不进入仓库或 memory。
 - `phasepick-api` 是系统级 systemd unit，`active` 且 `enabled`，但进程以普通用户运行。
