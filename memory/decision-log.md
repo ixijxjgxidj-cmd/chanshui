@@ -100,3 +100,19 @@
 - guard 诊断：0 秒已恶化为 `33 residual / 40 lost`；10 秒仍有 `18 residual`，并产生 `77 lost / 37 collateral`。局部 veto 不能回溯修复卷积/滑窗已造成的远程变化。
 - 防终检泄漏：没有 active guard，选择 `OFF`；08 波形未运行，ignored JSON 保持 `holdout08.records=null`。
 - 稳定边界：不再扩大固定 guard，不按文件/相位/gap 长度自适应，不在相同 zero-fill 输出上改 NaN、taper 或 interpolation。只有真实 gap/独立 gap 包、可冻结 gap augmentation 训练划分、模型层 observation mask 或可靠滑窗贡献重算机制出现时重开。
+
+## 2026-08-11：watchdog 跳过采集必须使用双重认证，cron 固定由 root 唯一管理
+
+- 决策：只有直接 TCP 对端为数值型 loopback，且请求 token 与服务器 0600 文件中的随机值恒定时间匹配时，才允许完整推理后跳过捕获并返回 accepted；XFF/X-Real-IP 永不授权。
+- 服务器证据：认证回环、部署烟测、手动 watchdog 与真实 5 分钟 cron 的捕获/manifest 增量均为 `0`；公网伪造 token 与回环代理头仍产生恰好 `1` 条捕获。
+- cron 边界：条目安装在 root crontab，使用唯一 managed marker，数量必须为 `1`。回滚前必须先撤下，前滚全部验收通过后才能恢复。
+- 临时日志边界：禁止固定 `/tmp` 日志名。Linux sticky-dir 会阻止 root 覆盖其他用户创建的普通文件，导致成功探活误判并重启；提交 `baa6f77` 固定使用每次 `mktemp` 的私有日志和 EXIT 清理，创建失败时 fail closed。
+- 隐私边界：token 值不得出现在仓库、unit、进程参数、cron 或 journal；只允许在服务器运行时文件中存在。
+
+## 2026-08-11：生产回滚采用“先停 cron、detach 旧提交、验收后再前滚”
+
+- 决策：回滚前保存当前 unit、提交和 root crontab，先停用 watchdog cron；使用 `git switch --detach` 切到已知旧提交并恢复旧 unit，不使用 `reset --hard`。
+- 已验证行为：旧 unit 不含 probe 参数，token 文件仍以 `0600` 保留但不被旧服务或 cron 使用；旧版四端点均 200，启动无 fallback。
+- 捕获治理：回滚测试按普通业务请求进入捕获，必须使用唯一文件名/哈希逐条核验并精确归档，不能用目录级删除；本次 3 条记录全部清理后生产捕获为 0。
+- 再前滚：切回 `main` 后必须重跑正式部署脚本、确认 token 被复用、三业务端点 accepted 且不采集，再恢复唯一 root cron并观察真实定时 OK。
+- 结果：回滚与再前滚均通过，最终服务器为 `main/baa6f77`、服务 active+enabled、cron 数量 1、生产捕获为空。

@@ -4,13 +4,13 @@
 
 ## 一句话结论
 
-项目已经从“原型”推进到“可公开服务且有冻结证据链的三任务生产版本”：T1 七成员概率集成、T2/T3 SeismicXM 特征模型、统一冻结基线、非 root systemd 服务和公网 API 均已跑通。第 2–6 轮候选均因跨包、逐文件安全性或必要条件失败而拒绝，生产保持不变。第 6 轮进一步证明 zero-fill 会在物理 gap 10 秒外改变七成员 probability、阈值峰和最终 Pick，最终列表删除与 annotation 局部置零两层固定 guard 都不能修复。当前全量回归为 `342 passed, 1 skipped`，发布清单锁定 14 个跟踪资产和 1 个外置 encoder。当前最高价值工作是完成 watchdog 捕获隔离的服务器双向验收，其后执行最终回滚/再前滚演练和统一复评。
+项目已经从“原型”推进到“可公开服务且有冻结证据链的三任务生产版本”：T1 七成员概率集成、T2/T3 SeismicXM 特征模型、统一冻结基线、非 root systemd 服务和公网 API 均已跑通。第 2–6 轮候选均因跨包、逐文件安全性或必要条件失败而拒绝，生产保持不变。watchdog 捕获隔离、唯一 root cron、公网伪造头反向验证以及真实回滚/再前滚演练均已在服务器完成。当前全量回归为 `342 passed, 1 skipped`，发布清单锁定 14 个跟踪资产和 1 个外置 encoder。当前最高价值工作是最终统一复评与公网代表样本复验，其后补齐服务器读取私有 GitHub 的只读发布路径。
 
 ## 已核验的生产状态
 
 - Git 主分支：`main`。
-- 当前运行代码提交：`53117b9d5912578c93d90e0a53774d66d0286aef`。
-- 本地第 4 轮结果为 `90ff84f`，发布硬化为 `ee2337a`；第 5 轮最终列表 gap mask 否证为 `d4a311d`，第 6 轮 annotation 概率层否证为 `bbf6e45`，均已推送 GitHub。服务器仓库仍为已验收记录提交 `c08bda58bad856fa1bd24f8975385696dbad11bc`。第 2–6 轮负实验和发布工具硬化都没有生产推理变化，因此不为同步离线证据或实验脚本而重启或替换服务。
+- 当前服务器仓库与运行发布提交：`baa6f77a71519c9e496dc0c27c1f2659de130b7e`；T1/T2/T3 模型和参数仍为已验收七成员/SeismicXM 生产版本，本次新增内容只在发布可靠性层。
+- 第 4 轮结果 `90ff84f`、发布硬化 `ee2337a`、第 5 轮 gap mask 否证 `d4a311d`、第 6 轮 annotation 否证 `bbf6e45`、watchdog 隔离 `c5153be` 与跨用户日志修复 `baa6f77` 均已推送 GitHub。负实验没有进入生产推理路径。
 - 唯一远端：`https://github.com/ixijxjgxidj-cmd/dizheng-gpt5.6-sol.git`。
 - 上次核验时服务器工作区干净；新的专用 SSH 密钥已通过 `BatchMode` 直连验证，备用代理未使用。凭据本身不进入仓库或 memory。
 - `phasepick-api` 是系统级 systemd unit，`active` 且 `enabled`，但进程以普通用户运行。
@@ -19,10 +19,11 @@
 - 300 请求稳态验收：均值约 42.17 ms，P95 约 44.91 ms，最大约 56.35 ms，RSS 增长约 4 MiB。
 - 生产捕获目录在验收后为空；测试流量已与正式捕获隔离。
 - 服务器尚未配置 GitHub 只读 deploy key，因此不能直接拉取私有仓库；这不影响当前服务，但影响后续发布自动化。
-- watchdog 捕获隔离已完成本地实现：只有“直接数值型 loopback 对端 + 0600 文件中的随机 token”同时满足才跳过采集；代理头不参与授权，服务还必须返回 accepted header。专用边界测试 `25 passed, 1 skipped`（Windows 无符号链接权限时跳过该平台项）、全量 `342 passed, 1 skipped`、Bash 语法和发布清单均通过；服务器双向验收及 cron 安装尚未执行。
+- watchdog 捕获隔离已部署并完成双向验收：只有“直接数值型 loopback 对端 + 0600 文件中的随机 token”同时满足才跳过采集；代理头不参与授权，服务还必须返回 accepted。Linux 专用测试 `26 passed`；认证回环、手动 watchdog 和真实 cron 的捕获增量均为 `0`，公网伪造 token/代理头仍恰好产生 `1` 条捕获并已精确清理。
 - `deploy/production_release_manifest.json` 已成为生产资产、参数和 fallback 策略的机器可校验清单；`scripts/verify_release_manifest.py --require-external` 已对本地 14 个跟踪资产和外置 SeismicXM encoder 全绿。
 - `deploy/deploy_api.sh` 会在写 unit/重启服务之前运行发布校验。默认 `ALLOW_MODEL_FALLBACK=0`；缺少默认 SeismicXM encoder 时中止，只有显式设为 `1` 才允许 baseline 降级，已存在但哈希错误的 encoder 无条件拒绝。
-- 本轮只增强发布可靠性、文档和产物元数据，没有改变当前 T1/T2/T3 默认推理行为，因此稳定服务器未同步、未重启；专用密钥直连与服务 `active` 状态已再次只读核验。
+- root cron 初验发现固定 `/tmp` 日志会因跨用户 sticky-dir 保护误判失败；managed cron 立即撤下，提交 `baa6f77` 改为每次 `mktemp` 私有日志。修复后 root 手动与真实定时触发均 OK、服务 PID 不变、捕获增量 `0`。
+- 已执行真实回滚/再前滚：回滚前停用 cron，旧 unit 不含 probe 参数但 token 仍安全保留；旧版四端点 200，三条回滚捕获精确归档。再前滚复用原 token，恢复 probe unit 和唯一 root cron，四端点、手动与定时探活再次全绿。最终服务 active、enabled，服务器工作树干净，生产捕获为空。
 - 仓库敏感扫描已不再发现服务器地址、账号、代理、密钥路径或比赛数据机器绝对路径。两份归档 checkpoint 清洗时逐一验证 174 个张量完全相同；两份 baseline joblib 清洗后固定探针预测一致。
 
 ## 当前生产模型
@@ -140,8 +141,9 @@ OFF 路径已逐文件和四种完整包口径复现到 `1e-9`。R2 tau 0.35/0.4
 
 ## 下一步顺序
 
-1. 提交并推送 watchdog 捕获隔离；服务器部署后验证本机认证探针不新增捕获、公网伪造 header 仍被捕获，再安装 5 分钟 cron。
-2. 最终冻结前执行真正的回滚再前滚演练、统一复评和公网复验，并为服务器补齐 GitHub 私有仓库只读发布路径。
-3. gap 方向冻结，不继续固定 guard；只在真实 gap/独立包、可冻结训练数据或模型层显式 mask 到位后重开。
-4. T2 暂不继续 source-only residual、quantile/Huber、双模型平均或相同幅值拼接；只有无标签目标批次、解释偏移的元数据、DiTing/目标区标签或新的独立包出现时重开。
-5. T3 暂不继续 NCM/top-m/中心化网格；只有实质不同的域不变机制、可靠无标签域移信号或新的独立包才重开。
+1. 最终统一复评当前冻结生产版本，并用公网代表样本复验四端点；不重开第 2–6 轮已否证方向。
+2. 为服务器补齐 GitHub 私有仓库只读发布路径，避免后续继续依赖手工增量 bundle；不得部署个人写权限凭据。
+3. 比赛窗口前核对平台登记 URL、cron 最近一次 OK、生产捕获与磁盘余量；本任务不自行修改平台登记。
+4. gap 方向冻结，不继续固定 guard；只在真实 gap/独立包、可冻结训练数据或模型层显式 mask 到位后重开。
+5. T2 暂不继续 source-only residual、quantile/Huber、双模型平均或相同幅值拼接；只有无标签目标批次、解释偏移的元数据、DiTing/目标区标签或新的独立包出现时重开。
+6. T3 暂不继续 NCM/top-m/中心化网格；只有实质不同的域不变机制、可靠无标签域移信号或新的独立包才重开。

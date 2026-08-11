@@ -1,9 +1,11 @@
 # 发布可靠性阶段 007：watchdog 回环探针捕获隔离
 
 - 日期：2026-08-11
-- 状态：**实现与本地边界验证完成；待提交及服务器双向验收**
+- 状态：**已实现、提交、服务器双向验收、安装 cron，并完成真实回滚/再前滚演练**
 - 基准分支：`main`
 - 基准提交：`70a3ecf`
+- 隔离实现提交：`c5153be`
+- 跨用户临时日志修复：`baa6f77`
 - 性质：发布可靠性与数据治理，不是 T1/T2/T3 模型提分实验；不宣称官方分数增益
 
 ## 1. 当前问题
@@ -126,4 +128,67 @@ release manifest = PASS, tracked=14, external=1
 
 边界覆盖包括 IPv4/IPv6 loopback、缺失/错误 token、非 loopback 即使持有正确 token、非 loopback 同时伪造 XFF/X-Real-IP、服务未配置 token、三个业务端点、token 文件缺失/过短/过长/非法字符，以及 check_api 未获 accepted 时非零退出。所有测试通过；公网元数据 header 没有进入授权判断。
 
-仍未完成：GitHub 提交，以及服务器上“本机认证探针不新增捕获 / 公网伪造 header 仍新增捕获”的双向验收和 cron 安装。
+## 8. 服务器双向验收
+
+服务器先以增量 Git bundle 严格 fast-forward 到隔离实现提交；重启前闸门全部通过：
+
+```text
+Linux 专用边界测试 = 26 passed, 1 warning
+python compile = pass
+bash -n = pass
+release manifest = PASS, tracked=14, external=1
+```
+
+正式部署后已核验：
+
+- systemd 服务为 `active`、`enabled`，仍以非 root 普通用户运行；
+- token 是普通文件而非符号链接，目录 `0700`、文件 `0600`，所有者与服务用户一致；
+- unit 只含 `--probe-token-file` 路径，token 值不在 unit、进程参数或 journal 中；
+- 启动日志确认 T1/T2/T3 均正常加载，无模型 fallback；
+- `/health`、`/pick`、`/magnitude`、`/classify` 均为 HTTP 200；三个业务端点的认证回环请求均返回 accepted；
+- 部署烟测、三业务端点认证探针和手动 watchdog 的捕获波形增量、manifest 增量均为 `0`。
+
+公网反向验证使用唯一合成 MiniSEED，并同时伪造 probe token、`X-Forwarded-For` 与
+`X-Real-IP` 回环值：请求仍为 HTTP 200，但响应没有 accepted；服务器恰好新增 `1`
+条 manifest 和 `1` 个波形，文件名、字节数与哈希逐项匹配。该唯一记录随后被精确移入
+`.runtime` 测试归档，manifest 原子重写只移除对应行，生产捕获恢复为空。
+
+## 9. root cron 暴露的问题与修复
+
+第一次用 root 的最小 cron 环境手动运行时，推理本身成功，但旧脚本试图覆盖普通用户先前
+创建的固定 `/tmp/phasepick_watchdog_last.log`。Linux sticky-dir 的
+`fs.protected_regular` 边界使重定向失败，watchdog 因而误判失败并触发了一次不必要重启。
+managed cron 随即撤下，服务恢复 active，捕获仍为空。
+
+修复提交 `baa6f77` 将固定日志改为每次运行由 `mktemp` 创建的私有临时文件，并用 EXIT
+trap 清理；临时文件创建失败时 fail closed。新增回归断言禁止重新引入固定 `/tmp` 路径。
+修复后：
+
+- 本地专用测试 `25 passed, 1 skipped`，全量 `342 passed, 1 skipped`；
+- Linux 专用测试 `26 passed`；
+- 在旧冲突文件仍存在时，root watchdog 返回 OK、服务 PID 不变、捕获增量 `0`；
+- 唯一 root cron 安装后，手动 cron 环境与真实 5 分钟定时触发均产生 OK、无 FAIL，
+  服务 PID 不变，捕获和 manifest 增量均为 `0`。
+
+## 10. 真实回滚与再前滚
+
+回滚前保存当前 unit、提交与 root crontab，并先撤下 managed cron。使用
+`git switch --detach` 切到部署前提交，未使用 `reset --hard`；恢复旧 unit 后：
+
+- 服务 `active`、`enabled`，unit 不含 probe 参数；
+- token 文件仍安全保留且模式为 `0600`，但 cron 为 `0`，不会由旧 watchdog 误用；
+- 启动无 fallback，四端点均 HTTP 200；旧版三个业务请求均不返回 accepted；
+- 三个唯一回滚测试请求按预期形成 `3` 条 manifest 与 `3` 个波形，完整核验后精确归档，
+  生产捕获再次恢复为空。
+
+随后切回 `main` 并重跑正式部署脚本。原 token 被复用，unit 恢复 probe 参数；三业务端点
+再次全部 accepted 且捕获增量 `0`。root crontab 从备份恢复为唯一 managed 条目，手动和
+真实定时触发均为 OK、无 PID 变化。最终服务器停在 `baa6f77`，工作树干净，服务 active，
+生产捕获为空，watchdog cron 数量为 `1`。
+
+## 11. 结论
+
+本阶段通过生产准入并已部署。它不改变 T1/T2/T3 推理结果或历史官方分数，只提高探活、
+捕获数据治理和回滚可靠性。稳定规则为：watchdog 跳过采集必须同时满足直接数值型
+loopback 与随机 token；代理头永不授权；cron 必须以 root 唯一安装；临时日志必须每次
+私有创建；任何回滚必须先撤下 cron，再恢复旧 unit，前滚验收后才重新启用。

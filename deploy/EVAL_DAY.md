@@ -18,7 +18,8 @@ bash $REPO/deploy/watchdog.sh                         # 手动跑一次真实请
 > 运行；服务器本机的 T1/T2/T3 与 300 请求 soak 已全绿。
 > 公网地址按实际机器配置为 `http://<公网地址>:8000`，云安全组 TCP 8000 已放行，且已从非服务器
 > 机器完成 `/health`、`/pick`、`/magnitude`、`/classify` 四端点 HTTP 200 复测。
-> 当前剩余的是比赛平台 URL 登记；watchdog cron 仍待按 §2 的采集污染说明处理后安装。**
+> watchdog 捕获隔离、唯一 root cron、真实定时 OK 以及回滚/再前滚演练均已完成。
+> 当前剩余的是由用户在比赛窗口核对/登记平台 URL；本任务不会自动修改平台配置。**
 
 ---
 
@@ -97,13 +98,17 @@ bash $REPO/deploy/watchdog.sh
 # 可选但推荐：运行前后比较捕获文件数，应完全不变
 find "$REPO/captured" -type f 2>/dev/null | wc -l
 
-# 3) 装 cron（WEBHOOK_URL 填钉钉/企微机器人地址，留空=只写日志不告警）
-crontab -e
+# 3) 装到 root crontab（watchdog 失败时需要 systemctl restart 权限）
+#    WEBHOOK_URL 填钉钉/企微机器人地址，留空=只写日志不告警
+sudo crontab -e
 # 先在 crontab 顶部设置：REPO=<仓库路径>
-# */5 * * * * WEBHOOK_URL='' bash "$REPO/deploy/watchdog.sh" >> "$REPO/watchdog.log" 2>&1
+# */5 * * * * WEBHOOK_URL='' bash "$REPO/deploy/watchdog.sh" >> "$REPO/watchdog.log" 2>&1 # PHASEPICK_WATCHDOG_MANAGED_V1
 ```
 
-评测中每小时瞄一眼 `tail $REPO/watchdog.log`：连续 FAIL→restart 循环 = 转 §4 处置。
+安装后必须确认 `sudo crontab -l | grep -c PHASEPICK_WATCHDOG_MANAGED_V1` 等于 `1`，
+再用 root 的最小环境手动跑一次，并观察至少一条真实定时 `OK`。脚本使用每次调用独立的
+`mktemp` 日志；若代码中仍出现固定 `/tmp/phasepick_watchdog_last.log`，说明服务器是旧版，
+不得安装 cron。评测中每小时瞄一眼 `tail $REPO/watchdog.log`：连续 FAIL→restart 循环 = 转 §4 处置。
 
 ---
 
