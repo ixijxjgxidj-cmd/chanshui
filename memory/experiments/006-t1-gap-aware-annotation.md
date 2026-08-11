@@ -156,7 +156,7 @@ subsample refine = true
 4. 使用 `float64` 累加、均值后保留与生产相同的 annotation 数组语义；
 5. 不在导出函数内挑峰、mask 或修改输入 Stream。
 
-对结构哨兵，使用导出的 raw annotation 重新执行正常阈值、conditional floor、refine、内部 Pick 转换和全部生产后处理；结果必须与 `picker.pick()` 的 phase/count/time/confidence 在固定容差内一致。若不能复刻生产结果，停止实验，不能解释概率差。
+对结构哨兵，使用导出的 raw annotation 重新执行正常阈值、conditional floor、refine、内部 Pick 转换和全部生产后处理；结果必须与 `picker.pick()` 一一对应、数量相同、phase/station 相同，且 `abs(time_delta) <= 1e-6s`、`abs(confidence_delta) <= 1e-7`。若不能复刻生产结果，停止实验，不能解释概率差。
 
 ## 6. 概率对齐与远程定义
 
