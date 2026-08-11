@@ -223,6 +223,8 @@ student          = PhaseNet.from_pretrained("diting")
 sampling_rate    = 50 Hz
 window_samples   = 3001
 window_stride    = 30 s
+loss_region      = model-default central [250, 2751) samples
+final_window     = boundary-aligned when duration is not an exact stride multiple
 batch_size       = 2
 epochs           = 10
 optimizer        = AdamW
@@ -247,6 +249,8 @@ loss = 0.7 * CE(teacher_probability, student_probability)
 ```
 
 硬标签复用项目现有定义：P `sigma=0.2s`，S `sigma=0.3s`。不做温度、alpha、学习率、epoch、成员权重或后处理阈值的事后网格。
+
+DiTing PhaseNet 的正式 metadata 定义 `blinding=[250,250]`。教师 `annotate` 概率从输入起点 `+5.0s` 开始，实测总裁剪约 `9.99s`；因此训练虽然输入 3,001 点，但 loss 只比较输出中央 `[250,2751)` 的 2,501 点，并用时间戳/采样率核对教师切片。该区域由模型 metadata 决定，不是从历史分数调出的新超参数。30 秒为名义 stride；若记录末端不是 stride 的整数倍，最后一窗只做边界对齐以覆盖末端，不增加额外窗数或候选网格。
 
 三折固定为：
 

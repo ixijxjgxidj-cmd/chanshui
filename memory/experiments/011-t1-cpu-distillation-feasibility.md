@@ -226,6 +226,8 @@ student          = PhaseNet(diting)
 sampling_rate    = 50 Hz
 window_samples   = 3001
 window_stride    = 30 s
+loss_region      = model-default central [250, 2751) samples
+final_window     = boundary-aligned when needed
 batch_size       = 2
 epochs           = 10
 optimizer        = AdamW
@@ -248,6 +250,8 @@ KD+hard = 0.7 * CE(teacher_probability, student_probability)
 ```
 
 硬标签固定 P `sigma=0.2s`、S `sigma=0.3s`。三折分别留出第 1 轮、第 2 轮和 08；held-out 包不参与训练、早停、epoch 选择或候选选择。固定 10 epochs 后才运行 held-out 推理，并用生产完整后处理评分。
+
+正式实现必须读取 DiTing PhaseNet metadata 中固定的 `blinding=[250,250]`，把教师从 `+5.0s` 开始的概率曲线与学生输出中央 2,501 点按时间轴对齐；首尾 250 点不进入 loss。这是模型定义的有效输出区，不允许按历史评分另行调节。30 秒为名义 stride，只有最后一窗在记录长度不能整除时边界对齐。
 
 最终准入仍为三包 × 四数量罚 12 单元全部不下降且至少一项严格提升；还要报告逐文件回归、FP/FN、P/S 时差分与七个长文件。若两个候选都失败，不围绕相同历史包继续调温度、alpha、epoch、成员权重或后处理阈值。
 
