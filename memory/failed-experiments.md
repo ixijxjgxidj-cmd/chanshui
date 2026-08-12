@@ -25,6 +25,7 @@
 | T1 七成员 annotation 平均后、阈值/force-pair 前的 P/S gap guard 置零（0/0.5/1/2/5/10s） | 754,070 个远程 P/S 样点中 295,900 个变化超过 `1e-6`，最大差 0.609977；normal/floor 阈值穿越 745/3,551，remote peaks 为 12/2 与 22/38 induced/lost，raw final 精确复现 13/2 remote induced/lost。0s 为 33 residual/40 lost，10s 为 18 residual/77 lost/37 collateral；结构与 P95 1.6621ms 通过 | 阶段 A 拒绝；77/77 probability 条件失败，未运行 08，不改生产、不部署 | `memory/experiments/006-t1-gap-aware-annotation.md`；结果 SHA-256 `e39c261f...7ada6`；提交 `bbf6e45` |
 | T1 现有候选三包四口径稳健重排（`base/cond/fp/g6/g6gate/g7/ov90/prod2`） | 三包 × 四口径共 12 单元；全部候选覆盖完整，但无候选 12 单元全不下降。最佳 `ov90` worst `-6.1500`、mean `-3.0972`、仅 2/12 正向；第 1 轮四口径全降，08 四口径全降 | 拒绝所有候选替换；保持生产 `g7`，不改推理、不部署 | `memory/experiments/010-t1-candidate-robustness-audit.md`；结果 SHA-256 `98353140...0f988`；提交 `79028e0` |
 | T1 同架构 PhaseNet 三折 LOPO 蒸馏（`KD-only` / `0.7 KD + 0.3 hard`） | 正式缓存、六次训练和六次推理均成功。`KD-only` 12 单元 worst/mean `-10.4111/-2.9944`；`KD+hard` 虽 8/12 正向、mean `+6.3491`，但 R1 四口径全降，worst `-6.2722`。`KD+hard` 在 R2、08 和 7/7 长记录上涨，仍不满足全单元不退化 | 两个基础学生均拒绝，不部署；不得在相同包上继续扫 alpha/温度/epoch/阈值/成员权重 | `memory/experiments/012-t1-phasenet-lopo-distillation.md`；审计 SHA-256 `ff98f656...8b77d`；提交 `f508480` |
+| T1 `package-record-balanced KD+hard` 三折 LOPO | 权重守恒、held-out 屏障和三折训练均通过；R1 默认回退从 `-6.2722` 缩至 `-2.3222`，但 R2/08 反转为 `-5.1944/-8.6889`。12 单元 worst/mean `-8.6889/-3.3602`、仅 2/12 正向；长记录 1/7 上升、合计 `-14.7222` | 拒绝，不部署；同三包不得继续扫包权/记录权/截断/下限/长度分段 | `memory/experiments/013-t1-package-record-balanced-distillation.md`；审计 SHA-256 `8ffe1f5c...5f009`；提交 `4edc4c5` |
 
 ## 可重新开启的条件
 
@@ -38,3 +39,4 @@
 - 对 T1 最终列表 gap mask 条目，仅把 margin 改成别的固定数、按 gap 长度/相位/文件自适应、加 taper/interpolation 或用 08 回选都不构成重开理由。只有把作用点实质前移到 annotation/阈值/force-pair 之前，并证明 gap 10 秒外输出不变，才是不同机制。
 - 对 T1 annotation gap mask 条目，前移到输出 probability 后仍已失败；任何固定/自适应局部 guard、NaN 或相同 zero-fill 输出上的 taper/interpolation 都不构成新机制。只有真实 gap/独立 gap 包、可冻结 gap augmentation 训练划分、模型层显式 observation mask，或可验证的滑窗贡献重算机制才允许重开。
 - 对 T1 基础蒸馏条目，仅改变 KD/hard 权重、温度、epoch、early stopping、阈值、overlap、教师成员权重或按包选择 checkpoint 都不构成新实验。只有新的文献证据支持、在实现前预注册的域平衡或域不变训练机制，或新的独立包，才允许重开。
+- 对 T1 层级等权蒸馏条目，包权/记录权连续插值、clip、floor、按长度分段、保留长记录权重或按结果选择风险都属于同一失败机制的调参。只有真正独立的新包、官方规则变化，或不依赖连续样本权重的新机制才允许重开。
