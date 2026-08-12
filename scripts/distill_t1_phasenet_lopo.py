@@ -5,6 +5,8 @@ The held-out package is a hard barrier: this process requires exactly the other
 two waveform packages and, for ``kd-hard``, exactly the other two answer packages.
 It never opens held-out waveforms or answers.  Evaluation is deliberately a later
 process using ``run_official_task1.py`` so training cannot inspect held-out scores.
+The optional package-record-balanced risk changes only each retained window's
+contribution to the preregistered dense ``kd-hard`` loss.
 """
 
 from __future__ import annotations
@@ -68,6 +70,9 @@ P_SIGMA_S = 0.2
 S_SIGMA_S = 0.3
 DEFAULT_SEED = 20260812
 EXPECTED_TRAIN_WINDOWS = {"round1": 4698, "round2": 4221, "final08": 3939}
+RISK_WINDOW_ERM = "window-erm"
+RISK_PACKAGE_RECORD_BALANCED = "package-record-balanced"
+RISK_MODES = (RISK_WINDOW_ERM, RISK_PACKAGE_RECORD_BALANCED)
 
 
 @dataclass(frozen=True)
@@ -292,6 +297,13 @@ def _validate_package_barrier(
     return training[0], training[1]
 
 
+def _validate_risk(loss_name: str, risk_name: str) -> None:
+    if risk_name not in RISK_MODES:
+        raise ValueError(f"unsupported risk mode: {risk_name}")
+    if risk_name == RISK_PACKAGE_RECORD_BALANCED and loss_name != "kd-hard":
+        raise ValueError("package-record-balanced risk is only valid with kd-hard")
+
+
 def _ensure_empty_output(path: Path) -> None:
     if path.exists() and any(path.iterdir()):
         raise FileExistsError(
@@ -471,6 +483,137 @@ def _batch_arrays(
     )
 
 
+def build_window_risk_weights(
+    records: Sequence[PreparedRecord],
+    specs: Sequence[WindowSpec],
+    risk_name: str,
+) -> tuple[np.ndarray, dict[str, object]]:
+    """Return per-window weights and an ID-free hierarchy audit."""
+    if risk_name not in RISK_MODES:
+        raise ValueError(f"unsupported risk mode: {risk_name}")
+    if not records or not specs:
+        raise ValueError("risk weights require non-empty records and windows")
+
+    record_indices = np.asarray(
+        [int(spec.record_index) for spec in specs], dtype=np.int64
+    )
+    if int(record_indices.min()) < 0 or int(record_indices.max()) >= len(records):
+        raise ValueError("window spec record index is out of range")
+    windows_per_record = np.bincount(
+        record_indices, minlength=len(records)
+    ).astype(np.int64)
+    if np.any(windows_per_record <= 0):
+        raise ValueError("every prepared record must contribute at least one window")
+
+    packages = sorted({record.package for record in records})
+    if not packages:
+        raise ValueError("risk weights require at least one package")
+    record_count_by_package = {
+        package: sum(record.package == package for record in records)
+        for package in packages
+    }
+
+    if risk_name == RISK_WINDOW_ERM:
+        weights = np.ones(len(specs), dtype=np.float32)
+        formula = "1"
+    else:
+        total_windows = float(len(specs))
+        package_count = float(len(packages))
+        record_weights = np.asarray(
+            [
+                total_windows
+                / (
+                    package_count
+                    * record_count_by_package[record.package]
+                    * int(windows_per_record[index])
+                )
+                for index, record in enumerate(records)
+            ],
+            dtype=np.float64,
+        )
+        weights = record_weights[record_indices].astype(np.float32)
+        formula = (
+            "total_windows / "
+            "(number_of_packages * records_in_package * windows_in_record)"
+        )
+
+    actual = weights.astype(np.float64)
+    total_windows = len(specs)
+    expected_package_total = total_windows / len(packages)
+    package_audit: dict[str, dict[str, object]] = {}
+    package_totals: list[float] = []
+    record_equal_checks: list[bool] = []
+    for package in packages:
+        package_record_indices = [
+            index for index, record in enumerate(records) if record.package == package
+        ]
+        package_window_mask = np.asarray(
+            [records[index].package == package for index in record_indices],
+            dtype=bool,
+        )
+        package_total = float(actual[package_window_mask].sum())
+        package_totals.append(package_total)
+        record_totals = np.asarray(
+            [
+                actual[record_indices == record_index].sum()
+                for record_index in package_record_indices
+            ],
+            dtype=np.float64,
+        )
+        expected_record_total = expected_package_total / len(package_record_indices)
+        record_max_abs_error = float(
+            np.max(np.abs(record_totals - expected_record_total))
+        )
+        record_equal = bool(
+            np.allclose(
+                record_totals,
+                expected_record_total,
+                rtol=1e-6,
+                atol=1e-6,
+            )
+        )
+        record_equal_checks.append(record_equal)
+        package_audit[package] = {
+            "records": len(package_record_indices),
+            "windows": int(package_window_mask.sum()),
+            "total_weight": package_total,
+            "expected_total_weight": float(expected_package_total),
+            "total_weight_abs_error": abs(package_total - expected_package_total),
+            "record_total_weight_expected": float(expected_record_total),
+            "record_total_weight_min": float(record_totals.min()),
+            "record_total_weight_max": float(record_totals.max()),
+            "record_total_weight_max_abs_error": record_max_abs_error,
+        }
+
+    mean_weight = float(actual.mean())
+    package_totals_array = np.asarray(package_totals, dtype=np.float64)
+    checks = {
+        "mean_weight_is_one": bool(
+            np.isclose(mean_weight, 1.0, rtol=1e-6, atol=1e-6)
+        ),
+        "package_total_weights_equal": bool(
+            np.allclose(
+                package_totals_array,
+                expected_package_total,
+                rtol=1e-6,
+                atol=1e-6,
+            )
+        ),
+        "record_total_weights_equal_within_package": all(record_equal_checks),
+    }
+    return weights, {
+        "name": risk_name,
+        "formula": formula,
+        "window_weight": {
+            "min": float(actual.min()),
+            "max": float(actual.max()),
+            "mean": mean_weight,
+        },
+        "packages": package_audit,
+        "checks": checks,
+    }
+
+
 def _save_checkpoint_private(path: Path, payload: dict) -> None:
     import torch
 
@@ -486,6 +629,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cache-manifest", required=True)
     parser.add_argument("--held-out", required=True, choices=sorted(EXPECTED_PACKAGES))
     parser.add_argument("--loss", required=True, choices=["kd-only", "kd-hard"])
+    parser.add_argument(
+        "--risk",
+        default=RISK_WINDOW_ERM,
+        choices=RISK_MODES,
+        help=(
+            "training risk: window-erm preserves the original behavior; "
+            "package-record-balanced is preregistered for kd-hard only"
+        ),
+    )
     parser.add_argument(
         "--package",
         action="append",
@@ -512,6 +664,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     training_packages = _validate_package_barrier(
         args.held_out, package_paths, answer_paths, args.loss
     )
+    _validate_risk(args.loss, args.risk)
     if args.threads <= 0:
         raise SystemExit("--threads must be positive")
 
@@ -546,6 +699,13 @@ def main(argv: Iterable[str] | None = None) -> int:
             f"held-out {args.held_out}: got {len(specs)} windows, "
             f"expected preregistered {EXPECTED_TRAIN_WINDOWS[args.held_out]}"
         )
+    window_weights, risk_audit = build_window_risk_weights(
+        records, specs, args.risk
+    )
+    if args.risk == RISK_PACKAGE_RECORD_BALANCED and not all(
+        risk_audit["checks"].values()
+    ):
+        raise RuntimeError("package-record-balanced risk failed its conservation audit")
     prepare_seconds = time.perf_counter() - prepare_started
 
     random.seed(args.seed)
@@ -592,12 +752,16 @@ def main(argv: Iterable[str] | None = None) -> int:
         examples = 0
         epoch_started = time.perf_counter()
         for offset in range(0, len(order), BATCH_SIZE):
-            selected = [specs[int(index)] for index in order[offset : offset + BATCH_SIZE]]
+            batch_indices = order[offset : offset + BATCH_SIZE]
+            selected = [specs[int(index)] for index in batch_indices]
             x_np, teacher_np, hard_np = _batch_arrays(
                 records, selected, model_labels, include_hard
             )
             x = torch.from_numpy(x_np).to(device)
             teacher = torch.from_numpy(teacher_np).to(device)
+            example_weights = torch.from_numpy(
+                window_weights[batch_indices]
+            ).to(device)
             output = model(x)
             log_prob = phasenet_log_probs(output)
             central = log_prob[:, :, BLIND_LEFT : INPUT_SAMPLES - BLIND_RIGHT]
@@ -605,11 +769,13 @@ def main(argv: Iterable[str] | None = None) -> int:
                 raise RuntimeError(
                     f"student/teacher central shapes differ: {central.shape} vs {teacher.shape}"
                 )
-            kd_loss = -(teacher * central).sum(dim=1).mean()
+            kd_per_example = -(teacher * central).sum(dim=1).mean(dim=1)
+            kd_loss = (example_weights * kd_per_example).mean()
             if include_hard:
                 assert hard_np is not None
                 hard = torch.from_numpy(hard_np).to(device)
-                hard_loss = -(hard * central).sum(dim=1).mean()
+                hard_per_example = -(hard * central).sum(dim=1).mean(dim=1)
+                hard_loss = (example_weights * hard_per_example).mean()
                 loss = KD_WEIGHT * kd_loss + HARD_WEIGHT * hard_loss
             else:
                 hard_loss = torch.zeros((), device=device)
@@ -651,6 +817,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         "held_out": args.held_out,
         "training_packages": list(training_packages),
         "loss": args.loss,
+        "risk": args.risk,
         "student": f"PhaseNet({PRETRAINED})",
         "sampling_rate": SAMPLING_RATE,
         "input_samples": INPUT_SAMPLES,
@@ -682,6 +849,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             "git_head": current_head,
             "teacher_manifest_sha256": manifest_hash,
             "epoch_metrics": epoch_metrics,
+            "risk_audit": risk_audit,
         },
     )
     checkpoint_hash = sha256_file(checkpoint_path)
@@ -702,6 +870,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             "records": len(records),
             "windows": len(specs),
             "windows_by_package": windows_by_package,
+            "risk": risk_audit,
             "held_out_opened": False,
             "held_out_answer_opened": False,
         },
@@ -738,6 +907,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             {
                 "held_out": args.held_out,
                 "loss": args.loss,
+                "risk": args.risk,
                 "windows": len(specs),
                 "final_loss": epoch_metrics[-1]["loss"],
                 "checkpoint_sha256": checkpoint_hash,
@@ -747,7 +917,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             indent=2,
         )
     )
-    del records, specs, model, optimizer
+    del records, specs, window_weights, model, optimizer
     gc.collect()
     return 0
 

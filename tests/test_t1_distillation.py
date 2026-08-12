@@ -146,6 +146,73 @@ def test_held_out_barrier_requires_only_the_two_training_packages():
         )
 
 
+def test_package_record_balanced_risk_requires_kd_hard():
+    DISTILL._validate_risk("kd-hard", "package-record-balanced")
+    DISTILL._validate_risk("kd-only", "window-erm")
+    with pytest.raises(ValueError, match="only valid with kd-hard"):
+        DISTILL._validate_risk("kd-only", "package-record-balanced")
+
+
+def _risk_record(package: str, file_id: str) -> object:
+    return DISTILL.PreparedRecord(
+        package=package,
+        file_id=file_id,
+        waveform=np.zeros((3, 3001), dtype=np.float32),
+        teacher=np.zeros((3, DISTILL.VALID_SAMPLES), dtype=np.float32),
+        teacher_start_offset_s=5.0,
+        p_times_s=(),
+        s_times_s=(),
+    )
+
+
+def test_window_erm_risk_returns_unit_weights():
+    records = [_risk_record("a", "a1"), _risk_record("b", "b1")]
+    specs = [
+        DISTILL.WindowSpec(0, 0),
+        DISTILL.WindowSpec(0, 1500),
+        DISTILL.WindowSpec(1, 0),
+    ]
+    weights, audit = DISTILL.build_window_risk_weights(
+        records, specs, "window-erm"
+    )
+    np.testing.assert_array_equal(weights, np.ones(3, dtype=np.float32))
+    assert audit["window_weight"] == {"min": 1.0, "max": 1.0, "mean": 1.0}
+
+
+def test_package_record_balanced_risk_equalises_packages_and_records():
+    records = [
+        _risk_record("a", "a1"),
+        _risk_record("a", "a2"),
+        _risk_record("b", "b1"),
+        _risk_record("b", "b2"),
+        _risk_record("b", "b3"),
+    ]
+    window_counts = [1, 3, 2, 4, 5]
+    specs = [
+        DISTILL.WindowSpec(record_index, window * 1500)
+        for record_index, count in enumerate(window_counts)
+        for window in range(count)
+    ]
+    weights, audit = DISTILL.build_window_risk_weights(
+        records, specs, "package-record-balanced"
+    )
+
+    np.testing.assert_allclose(weights.mean(), 1.0, rtol=1e-6, atol=1e-6)
+    record_totals = [
+        float(weights[[spec.record_index == index for spec in specs]].sum())
+        for index in range(len(records))
+    ]
+    np.testing.assert_allclose(record_totals[:2], [3.75, 3.75], atol=1e-6)
+    np.testing.assert_allclose(record_totals[2:], [2.5, 2.5, 2.5], atol=1e-6)
+    assert audit["checks"] == {
+        "mean_weight_is_one": True,
+        "package_total_weights_equal": True,
+        "record_total_weights_equal_within_package": True,
+    }
+    assert audit["packages"]["a"]["total_weight"] == pytest.approx(7.5)
+    assert audit["packages"]["b"]["total_weight"] == pytest.approx(7.5)
+
+
 def test_batch_arrays_align_teacher_and_hard_targets():
     waveform = np.vstack(
         [
