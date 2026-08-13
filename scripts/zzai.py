@@ -23,15 +23,31 @@ def connect():
     port = int(os.environ.get("ZZAI_PORT", "22"))
     user = os.environ.get("ZZAI_USER", "root")
     pw = os.environ.get("ZZAI_PASS")
-    # Host and credentials stay out of the repo: the training box is ephemeral
-    # and its address/port change on pod reschedule.
-    if not host or not pw:
-        raise SystemExit("set ZZAI_HOST / ZZAI_PORT / ZZAI_PASS in the environment first")
+    key = os.environ.get("ZZAI_KEY")  # path to a private key, for key-auth hosts
+    # Host and credentials stay out of the repo: the boxes are ephemeral and
+    # their address/port change on reschedule. Key files live outside the repo.
+    if not host or not (pw or key):
+        raise SystemExit(
+            "set ZZAI_HOST / ZZAI_PORT and either ZZAI_PASS or ZZAI_KEY first")
     cli = paramiko.SSHClient()
     cli.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    cli.connect(host, port=port, username=user, password=pw,
-                timeout=45, banner_timeout=45, auth_timeout=45,
-                look_for_keys=False, allow_agent=False)
+    kwargs = dict(timeout=45, banner_timeout=45, auth_timeout=45,
+                  look_for_keys=False, allow_agent=False)
+    if key:
+        # Older Azure images hand out PEM RSA keys; try each parser in turn.
+        pkey = None
+        errors = []
+        for cls in (paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey):
+            try:
+                pkey = cls.from_private_key_file(key)
+                break
+            except Exception as exc:  # noqa: BLE001 - try the next key type
+                errors.append(f"{cls.__name__}: {exc}")
+        if pkey is None:
+            raise SystemExit("could not load ZZAI_KEY: " + "; ".join(errors))
+        cli.connect(host, port=port, username=user, pkey=pkey, **kwargs)
+    else:
+        cli.connect(host, port=port, username=user, password=pw, **kwargs)
     return cli
 
 
