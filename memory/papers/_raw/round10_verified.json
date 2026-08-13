@@ -1,0 +1,906 @@
+{
+ "n": 30,
+ "n_ok": 20,
+ "records": [
+  {
+   "channel": "crossref",
+   "title": "Severe Class Imbalance versus Near-Balanced Regimes in Seismic Hazard Classification: A Comparative Machine Learning and Explainable AI Study of Explosion Discrimination and Tsunami Risk Assessment",
+   "authors": [
+    "Eram Mahamud"
+   ],
+   "year": 2026,
+   "venue": "",
+   "doi": "10.2139/ssrn.7153278",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.2139/ssrn.7153278",
+   "abstract": "Machine learning is increasingly used to triage seismic hazard data streams, yet published pipelines rarely examine how the same modelling recipe behaves under two very different label distributions. This study reports two parallel classification experiments built on an identical extended model zoo, cross-validation protocol, and explainability toolkit, applied to (i) a severely imbalanced task discriminating man-made explosive events (quarry blasts, mining and chemical explosions) from natural earthquakes in a rolling 30-day United States Geological Survey (USGS) feed (10,505 events, 1.85% positive rate), and (ii) a near-balanced task predicting tsunami potential from 782 globally catalogued significant earthquakes (2001-2022, 38.9% positive rate). Twelve classifiers spanning linear, instancebased, kernel, tree-ensemble, boosting, neural, stacking, and attention-based tabular (TabNet) families were benchmarked with 10-fold stratified cross-validation, Friedman omnibus and Holm-Bonferroni-corrected pairwise Wilcoxon significance testing, and a four-method explainability suite (SHAP, LIME, permutation importance, partial dependence/ICE). On the explosion-discrimination task, gradient-boosted trees dominated (LightGBM: mean crossvalidated PR-AUC = 0.989, hold-out F1 = 0.974 on the minority class), with depth-related features driving predictions consistent with the near-surface seismic signature of blasting. On the tsunami-risk task, GradientBoosting was the best-ranked model by mean AUC (0.948, hold-out AUC = 0.954, F1 = 0.887), a materially harder ceiling than the explosion task despite the more balanced labels, reflecting genuine geophysical ambiguity in tsunami genesis rather than an artefact of class skew. In both experiments, the Friedman test rejected the null of equal classifier performance (p &amp;lt; 10⁻⁶), yet none of the 66 pairwise Holm-corrected comparisons per dataset reached significance a pattern we discuss as a caution against over-interpreting narrow leaderboard rankings from 10-fold designs. We contribute a reproducible, side-by-side comparative framework, a full multi-method explainability audit for both tasks, and an explicit leakage-sensitivity check demonstrating the explosion classifier's performance is not an artefact of reportingnetwork identity. Results suggest that classical gradient boosting remains competitive with, or superior to, more recent attention-based tabular architectures at the sample sizes typical of curated seismic hazard datasets, and that PR-AUCfirst reporting under severe imbalance yields more defensible headline metrics than ROC-AUC alone.",
+   "citations": 0,
+   "verification": {
+    "ok": false,
+    "target": "https://doi.org/10.2139/ssrn.7153278",
+    "final_url": "https://doi.org/10.2139/ssrn.7153278",
+    "http_status": 403,
+    "page_title": "Just a moment...",
+    "title_token_match_ratio": 0.0,
+    "bytes": 5582,
+    "fetched_at": "2026-08-13T12:45:27.891482+00:00"
+   },
+   "_theme": "T3_CLS",
+   "_score": 21.5
+  },
+  {
+   "channel": "arxiv",
+   "title": "An Interpretable Physics Informed Multi-Stream Deep Learning Architecture for the Discrimination between Earthquake, Quarry Blast and Noise",
+   "authors": [
+    "Nishtha Srivastava",
+    "Johannes Faber",
+    "Dhruv Aditya Srivastava"
+   ],
+   "year": 2026,
+   "venue": "",
+   "doi": "",
+   "arxiv_id": "2602.15993v1",
+   "url": "http://arxiv.org/abs/2602.15993v1",
+   "abstract": "The reliable discrimination of tectonic earthquakes from anthropogenic quarry blasts and transient noise remains a critical challenge in single station seismic monitoring. In this study, we introduce a novel Physics Informed Convolutional Recurrent Neural Network (PI CRNN) that embeds seismological domain knowledge directly into the feature extraction and learning process. We adapt a multistream architecture with three parallel encoders: (i) Time Domain: SincNet Encoder, (ii) MultiResolution Spectrogram branch, and, (iii) Physics Branch, followed by a fusion and a bidirectionalLSTM module. Evaluated on the Curated Pacific Northwest AI ready Seismic Dataset, the PI CRNN achieves an overall classification accuracy of 97.56 percent on an independent test set. It outperforms a standard CRNN baseline, a classical P to S amplitude ratio method, and a Physics Informed Neural Network (PINN) that enforces physical constraints via the loss function. Furthermore, the model demonstrates perfect precision in noise rejection (100 percent Recall). Interpretability analysis using saliency maps confirms that the architecture successfully learns distinct physical signatures, identifying bimodal P- and S-wave arrivals for earthquakes versus singular impulsive onsets for blasts. This work establishes a scalable, transparent framework for AI-driven seismology, proving that architectural inductive bias provides an alternative reliable approach compared to purely data-driven approaches.",
+   "citations": null,
+   "verification": {
+    "ok": true,
+    "target": "https://arxiv.org/abs/2602.15993v1",
+    "final_url": "https://arxiv.org/abs/2602.15993v1",
+    "http_status": 200,
+    "page_title": "[2602.15993v1] An Interpretable Physics Informed Multi-Stream Deep Learning Architecture for the Discrimination between Earthquake, Quarry Blast and Noise",
+    "title_token_match_ratio": 1.0,
+    "bytes": 42759,
+    "fetched_at": "2026-08-13T12:45:28.346243+00:00"
+   },
+   "_theme": "T3_CLS",
+   "_score": 21.0
+  },
+  {
+   "channel": "openalex",
+   "title": "Deep learning and transfer learning of earthquake and quarry-blast discrimination: applications to southern California and eastern Kentucky",
+   "authors": [
+    "Jun Zhu",
+    "Lihua Fang",
+    "Fajun Miao",
+    "Liping Fan",
+    "J H Zhang",
+    "Zefeng Li"
+   ],
+   "year": 2023,
+   "venue": "Geophysical Journal International",
+   "doi": "10.1093/gji/ggad463",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.1093/gji/ggad463",
+   "abstract": "SUMMARY Discrimination between tectonic earthquakes (EQs) and quarry blasts is important for accurate EQ cataloguing and seismic hazard analysis. However, reliable classification of these two types of seismic events is challenging with no prior knowledge of source parameters. Here, we applied deep learning to perform this classification task in southern California and eastern Kentucky. Since the two regions differ significantly in available labelled data, class imbalance and waveform characteristics, we adopted different strategies for them. We directly trained a convolutional neural network (CNN) for southern California due to its data abundancy. To alleviate the class imbalance, the blast data were augmented by repeated sampling. The model for California yields F1-scores of &amp;gt;83.5 per cent when estimated by individual stations and &amp;gt;98.1 per cent by network average (i.e. averaging the CNN’s outputs on all available stations for each event). As eastern Kentucky has a much smaller data size, we apply transfer learning to the pre-trained California model to fit the Kentucky data. The transfer-learned model yields F1-scores of &amp;gt;86.9 per cent when estimated by individual stations and &amp;gt;96.7 per cent by network average. The transfer-learned model outperforms the model re-trained from scratch for the Kentucky data. Gradient-weighted class activation mapping shows the S onset and the S long-period coda are important to identify EQs and blasts, respectively. By visual inspections of the seismograms, the source locations, the origin time and the P-wave polarities, we verified that most of the events falsely predicted by our models are actually mislabelled by seismic analysts. Our models thus show great potential in helping seismic analysts find those mislabelled events which remain hidden in the historical catalogue. Our results demonstrate that deep learning can achieve high accuracy in seismic event discrimination and that transfer learning is effective and efficient to generalize deep learning models across different regions.",
+   "citations": 27,
+   "verification": {
+    "ok": false,
+    "target": "https://doi.org/10.1093/gji/ggad463",
+    "final_url": "https://doi.org/10.1093/gji/ggad463",
+    "http_status": 403,
+    "page_title": "Just a moment...",
+    "title_token_match_ratio": 0.0,
+    "bytes": 5600,
+    "fetched_at": "2026-08-13T12:45:29.134226+00:00"
+   },
+   "_theme": "T3_CLS",
+   "_score": 20.5
+  },
+  {
+   "channel": "crossref",
+   "title": "Machine learning-based seismic event classification at selected stations of the Czech Regional Seismic Network",
+   "authors": [
+    "Michael Skotnica",
+    "Marek Pecha",
+    "Jana Pazdírková",
+    "Jana Rušajová",
+    "Bohdan Rieznikov"
+   ],
+   "year": 2026,
+   "venue": "",
+   "doi": "10.5194/egusphere-egu26-13017",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.5194/egusphere-egu26-13017",
+   "abstract": "The Czech Republic is a moderately active seismic region. Although most recorded earthquakes are weak, some events are strong enough to be felt by the population (e.g. Hlučín, December 2017, ML 3.5; West Bohemia, December 2025, ML 2.5 – 3.0). The majority of seismicity is mining-induced; however, areas of natural seismicity also exist, such as the Opava region and West Bohemia.Seismic activity in the Czech Republic is monitored by several seismic networks, with the Czech Regional Seismic Network (CRSN) serving as the primary system. Seismic monitoring includes rigorous event classification, i.e. distinguishing between natural and induced seismicity as well as between earthquakes and surface explosions recorded by seismic stations.With the growing volume of seismic data, semi-automated seismic event processing has become increasingly necessary. Automatic seismic event classification based on seismic signals represents a key step toward this goal. In previous work, we achieved promising results using machine learning (ML) techniques applied to data from the Ostrava-Krásné Pole station (OKC), which monitors the northeastern Czech Republic, an area with historically significant mining activity.In this study, we extend seismic event classification to stations with a different instrumentation and apply newer ML approaches. Namely, we analyze data from the Moravský Beroun (MORC) and Vranov (VRAC) stations of the CRSN, both equipped with broadband STS-2 sensors with a lower corner period of 120 s and recording continuous seismic waveforms at 100 Hz. The studied dataset used for binary classification consists of records of mining-induced seismic events (8,338 from MORC, 4,085 from VRAC) and quarry blasts (4,193 from MORC, 3,041 from VRAC), which were localized in the Czech Republic and its neighbouring countries in 2023 – 2025. Induced events with known P- and S-wave arrivals and explosions with known P-wave arrivals were selected. The P-wave and S-wave arrival times were taken from bulletins provided by the Institute of Physics of the Earth.Each processed event record includes 1 s before the P-wave arrival and either 20 s after the S-wave arrival (if available) or 30 s after the P-wave arrival. Data preprocessing included Z-score normalization and time-frequency transformation of the seismic signals.We evaluated several models, including LSTM, LSTM-FCN, LSTM with an attention block, a hybrid CNN-Vision Transformer (CNN-ViT) neural networks, and XGBoost. The evaluated models achieved F1-scores of 0.92 (LSTM-based), 0.94 (XGBoost), and 0.96 (CNN-ViT), with comparable performance for MORC-only, VRAC-only, and combined datasets.Furthermore, we combined data from the MORC and VRAC stations with records from the OKC station in a multimodal approach (37,561 events). Despite differences in instrumentation (e.g. lower corner periods of 120 s versus 30 s), the models achieved consistently high performance, with F1-scores ranging from 0.92 to 0.96 (CNN-ViT model yielding the best results).These results demonstrate that machine learning models represent a promising step toward automated seismic event classification and more efficient seismic signal processing.",
+   "citations": 0,
+   "verification": {
+    "ok": true,
+    "target": "https://doi.org/10.5194/egusphere-egu26-13017",
+    "final_url": "https://meetingorganizer.copernicus.org/EGU26/EGU26-13017.html",
+    "http_status": 200,
+    "page_title": "Abstract EGU26-13017",
+    "title_token_match_ratio": 1.0,
+    "bytes": 163950,
+    "fetched_at": "2026-08-13T12:45:32.366921+00:00"
+   },
+   "_theme": "T3_CLS",
+   "_score": 20.5
+  },
+  {
+   "channel": "crossref",
+   "title": "Applied research of deep learning technology in the classification of earthquake and blasting event",
+   "authors": [
+    "Shaohui Zhou",
+    "Jian Li",
+    "Qijie Zhou",
+    "Yang Liu",
+    "Chong Wang",
+    "Bing Lin",
+    "Han Zhang",
+    "Limei Peng",
+    "Dongya Li"
+   ],
+   "year": 2023,
+   "venue": "",
+   "doi": "10.21203/rs.3.rs-3024143/v1",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.21203/rs.3.rs-3024143/v1",
+   "abstract": "Abstract In order to quickly and accurately identify the types of natural earthquake and non-natural earthquake events, this paper proposes a lightweight convolutional neural network model. Since generally an event can be recorded by several stations, data preprocessing and classification based on the event shall be carried out in advance in order to avoid the occurrence of different station waveforms of the same event in any 2 of the training set, validation set and test set. With the three component waveforms recorded by stations after preprocessing as the input, the network model and hypoparameters are optimized by analyzing the average and variance of the accuracy and loss values of the verification set in the five-fold cross-validation, as well as the accuracy and loss curves in the training process. Finally, the classification results of all stations that achieve a certain signal-to-noise ratio for each event are taken as the output of this event type based on the principle that the minority is subordinate to the majority. In this study, 2190 natural earthquake and non-natural earthquake events recorded by the Hainan Seismic Network before August 2022 which contains 53067 waveforms are used to train and test the effect of the model. 20% of those events are selected randomly as the test set. The results showed that 427 of 438 randomly selected events were correctly identified, witch means that the accuracy rate is 97.48%.Among them, the accuracy rate of seismic events was 95.59%, the recall rate was 89.04%, the accuracy rate of blasting events was 97.84%, and the recall rate was 99.18%. To sum up, the convolution neural network model constructed in this paper can quickly and accurately identify the types of natural and non-natural earthquakes in Hainan.",
+   "citations": 0,
+   "verification": {
+    "ok": true,
+    "target": "https://doi.org/10.21203/rs.3.rs-3024143/v1",
+    "final_url": "https://www.researchsquare.com/article/rs-3024143/v1",
+    "http_status": 200,
+    "page_title": "Applied research of deep learning technology in the classification of earthquake and blasting event | Research Square",
+    "title_token_match_ratio": 1.0,
+    "bytes": 134070,
+    "fetched_at": "2026-08-13T12:45:34.904780+00:00"
+   },
+   "_theme": "T3_CLS",
+   "_score": 19.5
+  },
+  {
+   "channel": "openalex",
+   "title": "Exploration of Machine Learning Methods to Seismic Event Discrimination in the Pacific Northwest",
+   "authors": [
+    "Akash Kharita",
+    "Marine Denolle",
+    "Alexander Hutko",
+    "Renate Hartog",
+    "Stephen M. Malone"
+   ],
+   "year": 2026,
+   "venue": "Seismica",
+   "doi": "10.26443/seismica.v5i1.2068",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.26443/seismica.v5i1.2068",
+   "abstract": "Accurately separating tectonic, anthropogenic, and geomorphologic seismic sources is essential for Pacific Northwest (PNW) monitoring but remains difficult as networks densify and signals overlap. Prior work largely treats binary discrimination and seldom compares classical machine learning (feature-engineered) and deep learning (end-to-end) approaches under a common, multi-class setting with operational constraints. We evaluate methods and features for four-way source discrimination – earthquakes, explosions, surface events, and noise – and identify models that are both accurate and deployable. Using ∼200k three-component waveforms from &gt;70k events in an AI-curated PNW dataset, we test random-forest classifiers on TSFEL, physics-informed, and scattering features, and CNNs that ingest time series (1D) or spectrograms (2D); we benchmark on a balanced common test set, a 10k-event network dataset, and out-of-domain data (global surface events; near-field blasts). CNNs taking spectrograms lead with accuracy performance over 92% for within-domain (as a short-and-fat CNN SeismicCNN 2D) and out-of-domain (as a long and skinny CNN QuakeXNet 2D), versus 89% for the best random forest; performance remains strong at low signal-to-noise ratio (SNR) and longer distances, and generalizes to independent network and global datasets. QuakeXNet (2D) is lightweight (70k parameters; 1.2 MB) and integrated into SeisBench. On commodity hardware, it processes a full day of 100 Hz three-component data in 9 s. These results show spectrogram-based CNNs provide state-of-the-art accuracy, efficiency, and robustness for real-time PNW operations and transferable surface-event monitoring.",
+   "citations": 0,
+   "verification": {
+    "ok": true,
+    "target": "https://doi.org/10.26443/seismica.v5i1.2068",
+    "final_url": "https://seismica.library.mcgill.ca/article/view/2068",
+    "http_status": 200,
+    "page_title": "Exploration of Machine Learning Methods to Seismic Event Discrimination in the Pacific Northwest | Seismica",
+    "title_token_match_ratio": 1.0,
+    "bytes": 99157,
+    "fetched_at": "2026-08-13T12:45:38.584789+00:00"
+   },
+   "_theme": "T3_CLS",
+   "_score": 19.5
+  },
+  {
+   "channel": "crossref",
+   "title": "Comparison of seismic phase association algorithms and their performance.",
+   "authors": [
+    "Jorge Antonio Puente Huerta",
+    "Christian Sippl"
+   ],
+   "year": 2023,
+   "venue": "",
+   "doi": "10.5194/egusphere-egu23-6806",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.5194/egusphere-egu23-6806",
+   "abstract": "Seismic phase association is a fundamental task for earthquake detection and location workflows, as it gathers individual seismic phases detected on multiple seismic stations and associates them to events.Current phase picking algorithms are capable of generating large phase datasets, and together with new improved phase association algorithms, they can create larger and more complete earthquake catalogs when applied to dense seismic networks (permanent or temporary).As part of project MILESTONE, which aims at the automatic creation of large microseismicity catalogs in subduction settings, the present study evaluates the performance of three different phase association algorithms, both by comparing their outputs with a handpicked benchmark dataset and by the retrieval of synthetic events.For this purpose, we used seismic data from the IPOC (Integrated Plate boundary Observatory Chile) permanent deployment of broadband stations in Northern Chile.We manually picked P and S phases of raw waveforms on randomly chosen days, with event rates in excess of 100-150 per day. All events that were visually recognizable were picked and located, leading to a dataset to be used as &amp;#8220;ground truth&amp;#8221;.We do the phase picking with EQTransformer (Mousavi et al. 2020) and evaluate the performance of three seismic phase associators: 1) PhaseLink (Ross et al. 2019), a deep learning based approach trained on millions of synthetic sequences of P and S arrival times, 2) REAL (Zhang et al. 2020), that combines the advantages of pick-based and waveform-based methods, primarily through counting the number of P and S picks and secondarily from travel-time residuals, and 3) GaMMA (Zhu et al. 2021), an associator that treats the association problem as an unsupervised clustering problem in a probabilistic framework.In the synthetic test we use NonLinLoc raytracer and add random noise, as well as false picks to simulate an automatic picker output.In both experiments we evaluate the number of correctly associated and lost events, and the number of constituent picks per event.",
+   "citations": 0,
+   "verification": {
+    "ok": true,
+    "target": "https://doi.org/10.5194/egusphere-egu23-6806",
+    "final_url": "https://meetingorganizer.copernicus.org/EGU23/EGU23-6806.html",
+    "http_status": 200,
+    "page_title": "Abstract EGU23-6806",
+    "title_token_match_ratio": 1.0,
+    "bytes": 147129,
+    "fetched_at": "2026-08-13T12:45:42.703305+00:00"
+   },
+   "_theme": "FP_LONG",
+   "_score": 19.5
+  },
+  {
+   "channel": "arxiv",
+   "title": "Which picker fits my data? A quantitative evaluation of deep learning based seismic pickers",
+   "authors": [
+    "Jannes Münchmeyer",
+    "Jack Woollam",
+    "Andreas Rietbrock",
+    "Frederik Tilmann",
+    "Dietrich Lange",
+    "Thomas Bornstein",
+    "Tobias Diehl",
+    "Carlo Giunchi",
+    "Florian Haslinger",
+    "Dario Jozinović",
+    "Alberto Michelini",
+    "Joachim Saul",
+    "Hugo Soto"
+   ],
+   "year": 2021,
+   "venue": "",
+   "doi": "10.1029/2021JB023499",
+   "arxiv_id": "2110.13671v1",
+   "url": "http://arxiv.org/abs/2110.13671v1",
+   "abstract": "Seismic event detection and phase picking are the base of many seismological workflows. In recent years, several publications demonstrated that deep learning approaches significantly outperform classical approaches and even achieve human-like performance under certain circumstances. However, as most studies differ in the datasets and exact evaluation tasks studied, it is yet unclear how the different approaches compare to each other. Furthermore, there are no systematic studies how the models perform in a cross-domain scenario, i.e., when applied to data with different characteristics. Here, we address these questions by conducting a large-scale benchmark study. We compare six previously published deep learning models on eight datasets covering local to teleseismic distances and on three tasks: event detection, phase identification and onset time picking. Furthermore, we compare the results to a classical Baer-Kradolfer picker. Overall, we observe the best performance for EQTransformer, GPD and PhaseNet, with EQTransformer having a small advantage for teleseismic data. Furthermore, we conduct a cross-domain study, in which we analyze model performance on datasets they were not trained on. We show that trained models can be transferred between regions with only mild performance degradation, but not from regional to teleseismic data or vice versa. As deep learning for detection and picking is a rapidly evolving field, we ensured extensibility of our benchmark by building our code on standardized frameworks and making it openly accessible. This allows model developers to easily compare new models or evaluate performance on new datasets, beyond those presented here. Furthermore, we make all trained models available through the SeisBench framework, giving end-users an easy way to apply these models in seismological analysis.",
+   "citations": null,
+   "verification": {
+    "ok": true,
+    "target": "https://arxiv.org/abs/2110.13671v1",
+    "final_url": "https://arxiv.org/abs/2110.13671v1",
+    "http_status": 200,
+    "page_title": "[2110.13671v1] Which picker fits my data? A quantitative evaluation of deep learning based seismic pickers",
+    "title_token_match_ratio": 1.0,
+    "bytes": 46666,
+    "fetched_at": "2026-08-13T12:45:44.208945+00:00"
+   },
+   "_theme": "DATA_XFER",
+   "_score": 19.0
+  },
+  {
+   "channel": "crossref",
+   "title": "SeisBench: A toolbox for benchmarking and applying machine learning in seismology.",
+   "authors": [
+    "Jack Woollam",
+    "Jannes Münchmeyer",
+    "Carlo Giunchi",
+    "Dario Jozinovic",
+    "Tobias Diehl",
+    "Joachim Saul",
+    "Alberto Michelini",
+    "Florian Haslinger",
+    "Dietrich Lange",
+    "Frederik Tilmann",
+    "Andreas Rietbrock"
+   ],
+   "year": 2021,
+   "venue": "",
+   "doi": "10.5194/egusphere-egu21-12218",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.5194/egusphere-egu21-12218",
+   "abstract": "&amp;lt;p&amp;gt;Machine learning methods have seen widespread adoption within the seismological community in recent years due to their ability to effectively process large amounts of data, while equalling or surpassing the performance of human analysts or classic algorithms. In the wider machine learning world, for example in imaging applications, the open availability of extensive high-quality datasets for training, validation, and the benchmarking of competing algorithms is seen as a vital ingredient to the rapid progress observed throughout the last decade. Within seismology, vast catalogues of labelled data are readily available, but collecting the waveform data for millions of records and assessing the quality of training examples is a time-consuming, tedious process. The natural variability in source processes and seismic wave propagation also presents a critical problem during training. The performance of models trained on different regions, distance and magnitude ranges are not easily comparable. The inability to easily compare and contrast state-of-the-art machine learning-based detection techniques on varying seismic data sets is currently a barrier to further progress within this emerging field. We present SeisBench, an extensible open-source framework for training, benchmarking, and applying machine learning algorithms. SeisBench provides access to various benchmark data sets and models from literature, along with pre-trained model weights, through a unified API. Built to be extensible, and modular, SeisBench allows for the simple addition of new models and data sets, which can be easily interchanged with existing pre-trained models and benchmark data. Standardising the access of varying quality data, and metadata simplifies comparison workflows, enabling the development of more robust machine learning algorithms. We initially focus on phase detection, identification and picking, but the framework is designed to be extended for other purposes, for example direct estimation of event parameters. Users will be able to contribute their own benchmarks and (trained) models. In the future, it will thus be much easier to compare both the performance of new algorithms against published machine learning models/architectures and to check the performance of established algorithms against new data sets. We hope that the ease of validation and inter-model comparison enabled by SeisBench will serve as a catalyst for the development of the next generation of machine learning techniques within the seismological community. The SeisBench source code will be published with an open license and explicitly encourages community involvement.&amp;lt;/p&amp;gt;",
+   "citations": 0,
+   "verification": {
+    "ok": true,
+    "target": "https://doi.org/10.5194/egusphere-egu21-12218",
+    "final_url": "https://meetingorganizer.copernicus.org/EGU21/EGU21-12218.html",
+    "http_status": 200,
+    "page_title": "CO Meeting Organizer EGU21",
+    "title_token_match_ratio": 1.0,
+    "bytes": 150964,
+    "fetched_at": "2026-08-13T12:45:46.844869+00:00"
+   },
+   "_theme": "DATA_XFER",
+   "_score": 18.5
+  },
+  {
+   "channel": "arxiv",
+   "title": "A fine-tuning workflow for automatic first-break picking with deep learning",
+   "authors": [
+    "Amir Mardan",
+    "Martin Blouin",
+    "Gabriel Fabien-Ouellet",
+    "Bernard-Giroux",
+    "Christophe Vergniault",
+    "Jeremy Gendreau"
+   ],
+   "year": 2024,
+   "venue": "",
+   "doi": "",
+   "arxiv_id": "2404.07400v1",
+   "url": "http://arxiv.org/abs/2404.07400v1",
+   "abstract": "First-break picking is an essential step in seismic data processing. First arrivals should be picked by an expert. This is a time-consuming procedure and subjective to a certain degree, leading to different results for different operators. In this study, we used a U-Net architecture with residual blocks to perform automatic first-break picking based on deep learning. Focusing on the effects of weight initialization on this process, we conduct this research by using the weights of a pretrained network that is used for object detection on the ImageNet dataset. The efficiency of the proposed method is tested on two real datasets. For both datasets, we pick manually the first breaks for less than 10% of the seismic shots. The pretrained network is fine-tuned on the picked shots and the rest of the shots are automatically picked by the neural network. It is shown that this strategy allows to reduce the size of the training set, requiring fine tuning with only a few picked shots per survey. Using random weights and more training epochs can lead to a lower training loss, but such a strategy leads to overfitting as the test error is higher than the one of the pretrained network. We also assess the possibility of using a general dataset by training a network with data from three different projects that are acquired with different equipment and at different locations. This study shows that if the general dataset is created carefully it can lead to more accurate first-break picking, otherwise the general dataset can decrease the accuracy. Focusing on near-surface geophysics, we perform traveltime tomography and compare the inverted velocity models based on different first-break picking methodologies. The results of the inversion show that the first breaks obtained by the pretrained network lead to a velocity model that is closer to the one obtained from the inversion of expert-picked first breaks.",
+   "citations": null,
+   "verification": {
+    "ok": true,
+    "target": "https://arxiv.org/abs/2404.07400v1",
+    "final_url": "https://arxiv.org/abs/2404.07400v1",
+    "http_status": 200,
+    "page_title": "[2404.07400v1] A fine-tuning workflow for automatic first-break picking with deep learning",
+    "title_token_match_ratio": 1.0,
+    "bytes": 43937,
+    "fetched_at": "2026-08-13T12:45:47.424855+00:00"
+   },
+   "_theme": "DATA_XFER",
+   "_score": 18.0
+  },
+  {
+   "channel": "openalex",
+   "title": "Application of Neural Network Automatic Event Detection for Reservoir-Triggered Seismicity Monitoring Networks",
+   "authors": [
+    "Jan Wiszniowski",
+    "Grzegorz Lizurek",
+    "Anna Tymińska",
+    "Paulina Kucia",
+    "Beata Plesiewicz"
+   ],
+   "year": 2026,
+   "venue": "Sensors",
+   "doi": "10.3390/s26030783",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.3390/s26030783",
+   "abstract": "This study examines reservoir-triggered seismicity (RTS) in Poland and Vietnam. The current state of individual RTS seismic networks necessitates detecting earthquakes from only a few stations. The number of P waves is often inadequate for phase association and event location, which underscores the importance of identifying S waves. Given that individual RTS cases may consist of only hundreds of events, it is crucial for algorithms to be trained on small datasets or to detect effectively using external, global training data. To evaluate this, we compared the efficiency of a deep learning global detection model, transfer learning to the RTS database, a specialized neural network designed for RTS, and manual detection of seismic signals. Transfer learning efficiency was database dependent. Additional interpretation and parametrization of detection results are assumed. Therefore, the emphasis is on phase detection, rather than phase picking accuracy, and detection sensitivity is more important than its specificity. Phase association plays a vital role in detecting seismic signals, facilitating the elimination of most false picks. As a result, the comparisons of detections were based on parameters related to the location of seismic events. The findings indicate that neither the automatic signal detection methods nor the manual methods alone are sufficient. However, their combination significantly enhances detectability. The final catalogs cover up to 30% more events compared to the previous manual. It fulfills the main aim of applying a neural network detector, which is to increase the number of seismic events in the catalog. It may also be further utilized in the research of the triggering process, such as identifying fluid paths and determining fault geometry.",
+   "citations": 0,
+   "verification": {
+    "ok": false,
+    "target": "https://doi.org/10.3390/s26030783",
+    "final_url": "https://www.mdpi.com/1424-8220/26/3/783",
+    "http_status": 200,
+    "page_title": "&nbsp;",
+    "title_token_match_ratio": 0.1818,
+    "bytes": 2201,
+    "fetched_at": "2026-08-13T12:45:48.262471+00:00"
+   },
+   "_theme": "FP_LONG",
+   "_score": 17.5
+  },
+  {
+   "channel": "openalex",
+   "title": "Micro-seismic events detection and its tectonic implications in Northeastern Hainan Province",
+   "authors": [
+    "Zeyu Ma",
+    "Hongyi Li",
+    "Min Liu",
+    "Yafen Huang",
+    "Shengzhong Zhang",
+    "Yuejun Lv"
+   ],
+   "year": 2023,
+   "venue": "Frontiers in Earth Science",
+   "doi": "10.3389/feart.2023.1169877",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.3389/feart.2023.1169877",
+   "abstract": "In this paper, we combine the U-net-based phase picking method (PhaseNet) with Graphics Processing Unit-Based Match and Locate technology (GPU-M&amp;amp;L) and a deep-learning-based seismic signal de-noising method (DeepDenoiser) as a workflow for automatically extracting micro-seismic information from continuous raw seismic data. PhaseNet is first used to detect missed seismic phases by scanning through the 5-year continuous waveform data recorded at five broad-band stations in Hainan province. Then Rapid Earthquake Association and Location method (REAL), VELEST program (1-D inversion of velocities and hypocenter locating) and HypoDD (a double-difference locating method) are applied to associate seismic phases with events and to locate, respectively. This initially established catalogue can be served as the template for the following match-filter work. We choose events with a high signal-to-noise ratio (SNR) as templates and apply GPU-M&amp;amp;L to detect more small earthquakes which are difficult to pick by routine methods due to the low SNR. Then, a deep learning-based noise reduction technique named DeepDenoiser is applied to extract seismic signal from noise to provide a better picking of arrival time and then to improve the relocation effects. Finally, we use HypoDD to relocate these events with P- and S- wave arrival times picked by PhaseNet. Compared with the five events listed in the China Earthquake Networks Center routine catalogue, in this study, we detect and locate 977 earthquakes by following the above procedure. Our relocation results illustrate quite a complex distribution pattern of events due to the complicated fault system in the northeastern part of Hainan Province.",
+   "citations": 2,
+   "verification": {
+    "ok": true,
+    "target": "https://doi.org/10.3389/feart.2023.1169877",
+    "final_url": "https://www.frontiersin.org/journals/earth-science/articles/10.3389/feart.2023.1169877/full",
+    "http_status": 200,
+    "page_title": "Frontiers | Micro-seismic events detection and its tectonic implications in Northeastern Hainan Province",
+    "title_token_match_ratio": 1.0,
+    "bytes": 688756,
+    "fetched_at": "2026-08-13T12:45:52.239306+00:00"
+   },
+   "_theme": "FP_LONG",
+   "_score": 17.5
+  },
+  {
+   "channel": "arxiv",
+   "title": "OBSTransformer: A Deep-Learning Seismic Phase Picker for OBS Data Using Automated Labelling and Transfer Learning",
+   "authors": [
+    "Alireza Niksejel",
+    "Miao Zhang"
+   ],
+   "year": 2023,
+   "venue": "",
+   "doi": "",
+   "arxiv_id": "2306.04753v1",
+   "url": "http://arxiv.org/abs/2306.04753v1",
+   "abstract": "Accurate seismic phase detection and onset picking are fundamental to seismological studies. Supervised deep-learning phase pickers have shown promise with excellent performance on land seismic data. Although it may be acceptable to apply them to OBS (Ocean Bottom Seismometers) data that are indispensable for studying ocean regions, they suffer from a significant performance drop. In this study, we develop a generalised transfer-learned OBS phase picker - OBSTransformer, based on automated labelling and transfer learning. First, we compile a comprehensive dataset of catalogued earthquakes recorded by 423 OBSs from 11 temporary deployments worldwide. Through automated processes, we label the P and S phases of these earthquakes by analysing the consistency of at least three arrivals from four widely used machine learning pickers (EqTransformer, PhaseNet, Generalized Phase Detection, and PickNet), as well as the AIC picker. This results in an inclusive OBS dataset containing ~36,000 earthquake samples. Subsequently, we employ this dataset for transfer learning and utilize a well-trained land machine learning model - EqTransformer as our base model. Moreover, we extract 25,000 OBS noise samples from the same OBS networks using the Kurtosis method, which are then used for model training alongside the labelled earthquake samples. Using three groups of test datasets at sub-global, regional, and local scales, we demonstrate that OBSTransformer outperforms EqTransformer. Particularly, the P and S recall rates at large distances (>200 km) are increased by 68% and 76%, respectively. Our extensive tests and comparisons demonstrate that OBSTransformer is less dependent on the detection/picking thresholds and is more robust to noise levels.",
+   "citations": null,
+   "verification": {
+    "ok": true,
+    "target": "https://arxiv.org/abs/2306.04753v1",
+    "final_url": "https://arxiv.org/abs/2306.04753v1",
+    "http_status": 200,
+    "page_title": "[2306.04753v1] OBSTransformer: A Deep-Learning Seismic Phase Picker for OBS Data Using Automated Labelling and Transfer Learning",
+    "title_token_match_ratio": 1.0,
+    "bytes": 42941,
+    "fetched_at": "2026-08-13T12:45:52.812184+00:00"
+   },
+   "_theme": "DATA_XFER",
+   "_score": 17.0
+  },
+  {
+   "channel": "crossref",
+   "title": "SeisBench—A Toolbox for Machine Learning in Seismology",
+   "authors": [
+    "Jack Woollam",
+    "Jannes Münchmeyer",
+    "Frederik Tilmann",
+    "Andreas Rietbrock",
+    "Dietrich Lange",
+    "Thomas Bornstein",
+    "Tobias Diehl",
+    "Carlo Giunchi",
+    "Florian Haslinger",
+    "Dario Jozinović",
+    "Alberto Michelini",
+    "Joachim Saul",
+    "Hugo Soto"
+   ],
+   "year": 2022,
+   "venue": "Seismological Research Letters",
+   "doi": "10.1785/0220210324",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.1785/0220210324",
+   "abstract": "Abstract Machine-learning (ML) methods have seen widespread adoption in seismology in recent years. The ability of these techniques to efficiently infer the statistical properties of large datasets often provides significant improvements over traditional techniques when the number of data are large (millions of examples). With the entire spectrum of seismological tasks, for example, seismic picking and detection, magnitude and source property estimation, ground-motion prediction, hypocenter determination, among others, now incorporating ML approaches, numerous models are emerging as these techniques are further adopted within seismology. To evaluate these algorithms, quality-controlled benchmark datasets that contain representative class distributions are vital. In addition to this, models require implementation through a common framework to facilitate comparison. Accessing these various benchmark datasets for training and implementing the standardization of models is currently a time-consuming process, hindering further advancement of ML techniques within seismology. These development bottlenecks also affect “practitioners” seeking to deploy the latest models on seismic data, without having to necessarily learn entirely new ML frameworks to perform this task. We present SeisBench as a software package to tackle these issues. SeisBench is an open-source framework for deploying ML in seismology—available via GitHub. SeisBench standardizes access to both models and datasets, while also providing a range of common processing and data augmentation operations through the API. Through SeisBench, users can access several seismological ML models and benchmark datasets available in the literature via a single interface. SeisBench is built to be extensible, with community involvement encouraged to expand the package. Having such frameworks available for accessing leading ML models forms an essential tool for seismologists seeking to iterate and apply the next generation of ML techniques to seismic data.",
+   "citations": 163,
+   "verification": {
+    "ok": false,
+    "target": "https://doi.org/10.1785/0220210324",
+    "final_url": "https://doi.org/10.1785/0220210324",
+    "http_status": 403,
+    "page_title": "Just a moment...",
+    "title_token_match_ratio": 0.8,
+    "bytes": 5801,
+    "fetched_at": "2026-08-13T12:45:53.812894+00:00"
+   },
+   "_theme": "DATA_XFER",
+   "_score": 16.5
+  },
+  {
+   "channel": "openalex+crossref",
+   "title": "Picking Regional Seismic Phase Arrival Times with Deep Learning",
+   "authors": [
+    "Albert Leonardo Aguilar Suarez",
+    "Gregory C. Beroza"
+   ],
+   "year": 2025,
+   "venue": "Seismica",
+   "doi": "10.26443/seismica.v4i1.1431",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.26443/seismica.v4i1.1431",
+   "abstract": "Sparse instrumental coverage for much of the Earth requires working with regional seismic phases for effective seismic monitoring. Machine learning phase pickers to date have focused on local earthquake recordings. Here we present deep learning models designed and trained to be effective at picking the arrival times of earthquake phases at distances up to 20 degrees. We trained our models on the CREW dataset, which includes 1.6 million earthquake waveforms with over 3.2 million labeled arrivals on 5 minute long three component seismograms. We present models that accurately pick the first arriving P and S waves and models that pick and classify Pn, Pg, Sn, and Sg phase arrivals. We apply these models in a variety of settings and compare their performance to established machine learning models that were trained on local earthquake recordings. We demonstrate the abilities of our models by finding new earthquakes in the Gorda plate offshore northern California. Finally, we use our multiple phase picker to find new examples with secondary arrivals from our massive training dataset. The goal of this method is to improve automatic earthquake monitoring in regions of sparse instrumental coverage and seismicity in remote regions far from instrumentation.",
+   "citations": 9,
+   "verification": {
+    "ok": true,
+    "target": "https://doi.org/10.26443/seismica.v4i1.1431",
+    "final_url": "https://seismica.library.mcgill.ca/article/view/1431",
+    "http_status": 200,
+    "page_title": "Picking Regional Seismic Phase Arrival Times with Deep Learning | Seismica",
+    "title_token_match_ratio": 1.0,
+    "bytes": 65064,
+    "fetched_at": "2026-08-13T12:45:55.677904+00:00"
+   },
+   "_theme": "FARFIELD",
+   "_score": 16.5
+  },
+  {
+   "channel": "openalex",
+   "title": "Generalization Across Tectonic Regions for a Deep-Learning P-Polarity Picker",
+   "authors": [
+    "Tatiana Kartseva",
+    "Jannes Münchmeyer",
+    "Blandine Gardonio",
+    "Agnès Helmstetter",
+    "David Marsan",
+    "Anne Socquet"
+   ],
+   "year": 2026,
+   "venue": "",
+   "doi": "10.22541/essoar.177307752.25366010/v1",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.22541/essoar.177307752.25366010/v1",
+   "abstract": "Accurate P-wave polarity picking is crucial for determining focal mechanisms, yet difficult to automate, especially for smaller magnitude events (typically M &lt; 4) with their low signal-to-noise ratio. Recently, deep learning models have shown promising performance for automatic polarity determination. However, as training data is limited to the long-term manual picks, performance on new regions and different tectonic settings is often unclear. This calls for models with strong cross-regional generalization, robustness to method-dependent picking errors and data-quality variations, and overall stable performance across diverse seismic network. Here, we train a deep-learning CNN-based model similar to the one proposed by Ross et al. (2018) previously demonstrated to be highly effective for a massive P-polarity picking. To avoid biases from dataset imbalance, we train the network explicitly to adhere to physical symmetry properties of seismic data. We systematically verified the model's transferability to different regions and tectonic settings using six hand-curated datasets representing diverse margin, intraplate and induced seismicity with various depths, distances and magnitude ranges. Our model is trained to remain robust under P-wave arrival time uncertainties of up to 1s. We make the most performant model, trained on more than 3 million examples from diverse regions, available for community use through SeisBench.",
+   "citations": 0,
+   "verification": {
+    "ok": false,
+    "target": "https://doi.org/10.22541/essoar.177307752.25366010/v1",
+    "final_url": "https://doi.org/10.22541/essoar.177307752.25366010/v1",
+    "http_status": 403,
+    "page_title": "Just a moment...",
+    "title_token_match_ratio": 0.0,
+    "bytes": 5717,
+    "fetched_at": "2026-08-13T12:45:56.485909+00:00"
+   },
+   "_theme": "FARFIELD",
+   "_score": 16.5
+  },
+  {
+   "channel": "crossref",
+   "title": "Improving Deep Learning-Based Seismic Phase Picking by Addressing Label Imbalance",
+   "authors": [
+    "Shinya Katoh",
+    "Masaaki Imaizumi",
+    "Yoshihisa Iio",
+    "Hiromichi Nagao"
+   ],
+   "year": 2026,
+   "venue": "",
+   "doi": "10.21203/rs.3.rs-10439246/v1",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.21203/rs.3.rs-10439246/v1",
+   "abstract": "Abstract Deep learning-based phase-picking models have significantly improved seismic waveform analyses efficiency. However, detection performance degrades when multiple seismic phases occur within a single waveform trace, particularly during intense seismic sequences such as aftershock activity. This may be attributed to pronounced label imbalance in semantic-segmentation-based phase picking, where narrow P- and S-phase label regions are overwhelmed by background label. To address this, we introduce an area-weighted soft cross-entropy loss that emphasizes phase-arrival regions during training without modifying model architecture. The proposed loss function was evaluated using two phase-picking architectures, SegPhase and PhaseNet. Experiments on the test dataset demonstrated that the weighted loss function reduced the scatter of arrival time residuals and improved the temporal consistency of predicted picks. Weighted-loss models also exhibited more recall-oriented behavior, reducing missed arrivals, though at the cost of increased false positives. Application to continuous waveform data from the 2019 Ridgecrest earthquake sequence showed that the weighted-loss models captured the main spatial and temporal characteristics of the seismicity while detecting more events than the original-loss models. These results demonstrate that loss function design constitutes an effective approach for improving the sensitivity of deep learning-based phase picking and enhancing event recovery in continuous waveform analysis.",
+   "citations": 0,
+   "verification": {
+    "ok": true,
+    "target": "https://doi.org/10.21203/rs.3.rs-10439246/v1",
+    "final_url": "https://www.researchsquare.com/article/rs-10439246/v1",
+    "http_status": 200,
+    "page_title": "Improving Deep Learning-Based Seismic Phase Picking by Addressing Label Imbalance | Research Square",
+    "title_token_match_ratio": 1.0,
+    "bytes": 65782,
+    "fetched_at": "2026-08-13T12:45:57.215654+00:00"
+   },
+   "_theme": "FP_LONG",
+   "_score": 16.5
+  },
+  {
+   "channel": "crossref",
+   "title": "Regional phase picking on single stations using deep learning",
+   "authors": [
+    "Erik Myklebust",
+    "Andreas Köhler"
+   ],
+   "year": 2023,
+   "venue": "",
+   "doi": "10.5194/egusphere-egu23-1831",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.5194/egusphere-egu23-1831",
+   "abstract": "Automatic detection of seismic events in processing pipelines at the IDC and many NDCs is mostly done using beamforming on arrays; however, extensive use of single stations can improve the detection capability and accuracy of event location. Advances in deep learning methods enable faster and more accurate processing of large quantities of single station data not seen previously. We use event catalogues including phase picks on a range of arrays in Scandinavia at regional distances (200-2000km), i.e., up to 3min separation between P and S arrivals, to train several deep learning models (PhaseNet and EQTransformer variants) using single stations within the arrays. The models are trained on clips of 324s to capture the multiple arrivals. The models are then applied to various single stations in Norway to assess their generalization. We can detect events at a variety of back-azimuths and distances.&amp;#160;&amp;#160; Furthermore, we expand the existing deep learning models to provide predictions for back-azimuth and distance. This imposes physical restrictions on the models, leading to increased picking accuracy for the predicted phase arrivals. Moreover, this enables us to use the vast number of single stations available to efficiently detect and locate distant events.&amp;#160;&amp;#160;",
+   "citations": 0,
+   "verification": {
+    "ok": true,
+    "target": "https://doi.org/10.5194/egusphere-egu23-1831",
+    "final_url": "https://meetingorganizer.copernicus.org/EGU23/EGU23-1831.html",
+    "http_status": 200,
+    "page_title": "Abstract EGU23-1831",
+    "title_token_match_ratio": 1.0,
+    "bytes": 146354,
+    "fetched_at": "2026-08-13T12:45:59.350176+00:00"
+   },
+   "_theme": "FARFIELD",
+   "_score": 16.5
+  },
+  {
+   "channel": "openalex",
+   "title": "Earthquake transformer—an attentive deep-learning model for simultaneous earthquake detection and phase picking",
+   "authors": [
+    "S. Mostafa Mousavi",
+    "William L. Ellsworth",
+    "Weiqiang Zhu",
+    "Lindsay Chuang",
+    "Gregory C. Beroza"
+   ],
+   "year": 2020,
+   "venue": "Nature Communications",
+   "doi": "10.1038/s41467-020-17591-w",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.1038/s41467-020-17591-w",
+   "abstract": "Earthquake signal detection and seismic phase picking are challenging tasks in the processing of noisy data and the monitoring of microearthquakes. Here we present a global deep-learning model for simultaneous earthquake detection and phase picking. Performing these two related tasks in tandem improves model performance in each individual task by combining information in phases and in the full waveform of earthquake signals by using a hierarchical attention mechanism. We show that our model outperforms previous deep-learning and traditional phase-picking and detection algorithms. Applying our model to 5 weeks of continuous data recorded during 2000 Tottori earthquakes in Japan, we were able to detect and locate two times more earthquakes using only a portion (less than 1/3) of seismic stations. Our model picks P and S phases with precision close to manual picks by human analysts; however, its high efficiency and higher sensitivity can result in detecting and characterizing more and smaller events.",
+   "citations": 1098,
+   "verification": {
+    "ok": false,
+    "target": "https://doi.org/10.1038/s41467-020-17591-w",
+    "final_url": "https://www.nature.com/articles/s41467-020-17591-w",
+    "http_status": 200,
+    "page_title": "Client Challenge",
+    "title_token_match_ratio": 0.0,
+    "bytes": 3038,
+    "fetched_at": "2026-08-13T12:45:59.953275+00:00"
+   },
+   "_theme": "FP_LONG",
+   "_score": 16.5
+  },
+  {
+   "channel": "crossref",
+   "title": "Earthquake Magnitude Estimation Using Machine Learning from Single Station Seismic Data in Rwanda",
+   "authors": [
+    "UWAMUNGU Dany",
+    "NIZEYIMANA Eric",
+    "NIZEYIMANA Pacifique",
+    "HAGUMUWUMVA David"
+   ],
+   "year": 2026,
+   "venue": "",
+   "doi": "10.21203/rs.3.rs-9532090/v1",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.21203/rs.3.rs-9532090/v1",
+   "abstract": "Abstract Earthquake magnitude estimation is critical for seismic monitoring, particularly in data-constrained regions with sparse station coverage. This study investigates the use of machine learning techniques for rapid and reliable magnitude estimation from single-station seismic waveform data recorded at the HUYE station in Rwanda, located within the western branch of the East African Rift System. A machine learning framework was developed using three-second waveform windows centered on P-wave arrivals. Both raw waveform inputs and physics-informed engineered features were utilized, including logarithmic amplitude, cumulative displacement, signal energy, root-mean-square (RMS) amplitude, signal-to-noise ratio (SNR), dominant frequency, spectral centroid, and band-limited spectral energy (1–10 Hz). Three models were developed and evaluated: a Random Forest regressor, a Convolutional Neural Network (CNN), and a hybrid CNN integrating waveform data with engineered features. Model performance was assessed using Mean Absolute Error (MAE), Root Mean Squared Error (RMSE), and the coefficient of determination (R²). The Random Forest model achieved the best performance (MAE = 0.274, RMSE = 0.351, R² = 0.684), outperforming both the hybrid model (MAE ≈ 0.278, R² ≈ 0.537) and the standalone CNN (MAE ≈ 0.329, R² ≈ 0.329). Feature importance analysis identified logarithmic displacement, band-limited spectral energy, and spectral centroid as the most influential predictors. Accurate and computationally efficient earthquake magnitude estimation can be achieved using single-station data through physics-informed feature engineering and machine learning. Feature-based models outperform deep learning approaches in data-limited environments, while hybrid models provide complementary improvements. The proposed framework offers a scalable solution for seismic monitoring and early warning systems in Rwanda and similar regions.",
+   "citations": 0,
+   "verification": {
+    "ok": true,
+    "target": "https://doi.org/10.21203/rs.3.rs-9532090/v1",
+    "final_url": "https://www.researchsquare.com/article/rs-9532090/v1",
+    "http_status": 200,
+    "page_title": "Earthquake Magnitude Estimation Using Machine Learning from Single Station Seismic Data in Rwanda | Research Square",
+    "title_token_match_ratio": 1.0,
+    "bytes": 50568,
+    "fetched_at": "2026-08-13T12:46:01.191563+00:00"
+   },
+   "_theme": "T2_MAG",
+   "_score": 16.5
+  },
+  {
+   "channel": "crossref",
+   "title": "Effects of Network-Specific Training and Waveform Denoising on ML-Based Seismic Phase Picking",
+   "authors": [
+    "Andreas Steinberg",
+    "Peter Gaebler",
+    "Catalina Ramos Domke"
+   ],
+   "year": 2026,
+   "venue": "",
+   "doi": "10.21203/rs.3.rs-9268145/v1",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.21203/rs.3.rs-9268145/v1",
+   "abstract": "Abstract We train and evaluate the performance of deep learning based models for picking seismic phases from local, regional and teleseismic seismological datasets. The datasets for training and testing at regional and teleseismic distances are assembled based on bulletins provided by the International Monitoring System (IMS) of the Comprehensive Nuclear-Test-Ban Treaty Organization (CTBTO). In this study we test the potential of machine learning (ML) algorithms, namely phase picking and denoising, to potentially help with the detection and characterization of potential nuclear explosions. ML algorithms offer the chance of potentially faster operational procedures for the detection of explosive and non-explosive events at lower signal-to-noise ratios as currently. For training and testing on local distances a dataset provided by the German Federal Seismological Survey (GR) is used. The established phase picking algorithms PhaseNet and EQT are employed here in both original model form and with newly trained models. The network specific trained phase picker models are evaluated against other available models. We also test the influence that autoencoder based denoising has on the performance of deep learning based seismic phase picking. We train phase picking models on denoised data. We find that original models already generalize well on IMS and GR data. However training of network specific models improves predictions for teleseismic and regional distances. Application on denoised seismic waveforms necessitates dedicated models trained on denoised data.",
+   "citations": 0,
+   "verification": {
+    "ok": true,
+    "target": "https://doi.org/10.21203/rs.3.rs-9268145/v1",
+    "final_url": "https://www.researchsquare.com/article/rs-9268145/v1",
+    "http_status": 200,
+    "page_title": "Effects of Network-Specific Training and Waveform Denoising on ML-Based Seismic Phase Picking | Research Square",
+    "title_token_match_ratio": 1.0,
+    "bytes": 64628,
+    "fetched_at": "2026-08-13T12:46:02.106458+00:00"
+   },
+   "_theme": "FARFIELD",
+   "_score": 16.5
+  },
+  {
+   "channel": "arxiv",
+   "title": "Seismic Arrival-time Picking on Distributed Acoustic Sensing Data using Semi-supervised Learning",
+   "authors": [
+    "Weiqiang Zhu",
+    "Ettore Biondi",
+    "Jiaxuan Li",
+    "Jiuxun Yin",
+    "Zachary E. Ross",
+    "Zhongwen Zhan"
+   ],
+   "year": 2023,
+   "venue": "",
+   "doi": "",
+   "arxiv_id": "2302.08747v2",
+   "url": "http://arxiv.org/abs/2302.08747v2",
+   "abstract": "Distributed Acoustic Sensing (DAS) is an emerging technology for earthquake monitoring and subsurface imaging. The recorded seismic signals by DAS have several distinct characteristics, such as unknown coupling effects, strong anthropogenic noise, and ultra-dense spatial sampling. These aspects differ from conventional seismic data recorded by seismic networks, making it challenging to utilize DAS at present for seismic monitoring. New data analysis algorithms are needed to extract useful information from DAS data. Previous studies on conventional seismic data demonstrated that deep learning models could achieve performance close to human analysts in picking seismic phases. However, phase picking on DAS data is still a difficult problem due to the lack of manual labels. Further, the differences in mathematical structure between these two data formats, i.e., ultra-dense DAS arrays and sparse seismic networks, make model fine-tuning or transfer learning difficult to implement on DAS data. In this work, we design a new approach using semi-supervised learning to solve the phase-picking task on DAS arrays. We use a pre-trained PhaseNet model as a teacher network to generate noisy labels of P and S arrivals on DAS data and apply the Gaussian mixture model phase association (GaMMA) method to refine these noisy labels to build training datasets. We develop a new deep learning model, PhaseNet-DAS, to process the 2D spatial-temporal data of DAS arrays and train the model on DAS data. The new deep learning model achieves high picking accuracy and good earthquake detection performance. We then apply the model to process continuous data and build earthquake catalogs directly from DAS recording. Our approach using semi-supervised learning provides a way to build effective deep learning models for DAS, which have the potential to improve earthquake monitoring using large-scale fiber networks.",
+   "citations": null,
+   "verification": {
+    "ok": true,
+    "target": "https://arxiv.org/abs/2302.08747v2",
+    "final_url": "https://arxiv.org/abs/2302.08747v2",
+    "http_status": 200,
+    "page_title": "[2302.08747v2] Seismic Arrival-time Picking on Distributed Acoustic Sensing Data using Semi-supervised Learning",
+    "title_token_match_ratio": 1.0,
+    "bytes": 44121,
+    "fetched_at": "2026-08-13T12:46:02.622913+00:00"
+   },
+   "_theme": "DATA_XFER",
+   "_score": 16.0
+  },
+  {
+   "channel": "openalex",
+   "title": "Test-Time Augmentations and Quality Controls for Improving Regional Seismic Phase Picking",
+   "authors": [
+    "Bingyao Han",
+    "Lin Tang",
+    "Li Ma",
+    "Hua Kong",
+    "Zhuowei Xiao"
+   ],
+   "year": 2025,
+   "venue": "Sensors",
+   "doi": "10.3390/s25237238",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.3390/s25237238",
+   "abstract": "Regional seismic phases are essential for imaging Earth's internal structure. Although extensive regional seismic networks are publicly available worldwide, only a small fraction of recorded phase arrivals are picked for constraining earthquake source parameters, leaving most data untapped. Recent deep-learning methods offer powerful tools for automatic phase picking, yet their performance often lags behind that of human experts, particularly at relatively large epicentral distances such as the case of the Pn phase (~200-2000 km). Here, we systematically assess the effect of different test-time augmentation strategies on the Pn phase picking performance using PickNet and PhaseNet, along with the Seis-PnSn dataset containing data worldwide to simulate the out-of-distribution situation. We also propose quality control measures to obtain reliable results when ground truths are unknown. Our experiments show that filter-bank augmentation is more effective than the shift augmentation and the rotation augmentation, improving the proportion of picks within ±0.5/1.0 s errors to 53.87%/70.82% compared with the baseline of 48.98%/66.94% for PickNet and ±0.5/1.0 s errors to 48.45%/67.06% compared with the baseline of 46.32%/64.28% for PhaseNet. After the quality control using the standard deviation of different augmentation results, the proportion is further boosted to 67.39%/78.53% for PickNet and 57.99%/74.72% for PhaseNet. Additionally, we provide the workflow in our study as scripts for real-world data processing. Our work enhances both the accuracy and accessibility of regional seismic phase picking, thereby contributing to the studies of Earth's internal structure and earthquake source characterization.",
+   "citations": 0,
+   "verification": {
+    "ok": false,
+    "target": "https://doi.org/10.3390/s25237238",
+    "final_url": "https://www.mdpi.com/1424-8220/25/23/7238",
+    "http_status": 200,
+    "page_title": "&nbsp;",
+    "title_token_match_ratio": 0.0,
+    "bytes": 2210,
+    "fetched_at": "2026-08-13T12:46:03.306831+00:00"
+   },
+   "_theme": "FARFIELD",
+   "_score": 15.5
+  },
+  {
+   "channel": "openalex",
+   "title": "Deep learning models for regional phase detection on seismic stations in Northern Europe and the European Arctic",
+   "authors": [
+    "Erik Bryhn Myklebust",
+    "Andreas Köhler"
+   ],
+   "year": 2024,
+   "venue": "Geophysical Journal International",
+   "doi": "10.1093/gji/ggae298",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.1093/gji/ggae298",
+   "abstract": "SUMMARY Seismic phase detection and classification using deep learning is so far poorly investigated for regional events since most studies focus on local events and short time windows as the input to the detection models. To evaluate deep learning on regional seismic records, we create a data set of events in Northern Europe and the European Arctic. This data set consists of about 151 000 three component event waveforms and corresponding phase arrival picks at stations in mainland Norway, Finland and Svalbard. We train several state-of-the-art and one newly developed deep learning model on this data set to pick P- and S-wave arrivals. The new method modifies the popular PhaseNet model with new convolutional blocks including transformers. This yields more accurate predictions on the long input time windows associated with regional events. Evaluated on event records not used for training, our new method improves the performance of the current state-of-the-art methods when it comes to recall, precision and pick time residuals. Finally, we test our new model for continuous mode processing on 4 d of single-station data from the ARCES array. Results show that our new method outperforms the existing array detector at ARCES. This opens up new opportunities to improve automatic array processing with deep learning detectors.",
+   "citations": 5,
+   "verification": {
+    "ok": false,
+    "target": "https://doi.org/10.1093/gji/ggae298",
+    "final_url": "https://doi.org/10.1093/gji/ggae298",
+    "http_status": 403,
+    "page_title": "Just a moment...",
+    "title_token_match_ratio": 0.0,
+    "bytes": 5600,
+    "fetched_at": "2026-08-13T12:46:03.905010+00:00"
+   },
+   "_theme": "FP_LONG",
+   "_score": 15.5
+  },
+  {
+   "channel": "openalex",
+   "title": "Picking Induced Seismicity with Deep Learning (piSDL)",
+   "authors": [
+    "Janis Heuel",
+    "Vincent Maurer",
+    "Michael Frietsch",
+    "Andreas Rietbrock"
+   ],
+   "year": 2025,
+   "venue": "Seismica",
+   "doi": "10.26443/seismica.v4i2.1579",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.26443/seismica.v4i2.1579",
+   "abstract": "Training deep-learning picking models with several published data sets can be easily done through the Python toolbox SeisBench. Most of the data sets contain earthquakes recorded at local, regional and teleseismic distances, with only limited data in the low magnitude, close distance region. Applying current published PhaseNet models to induced seismicity data leads to only a few events being detected and trained PhaseNet models are not able to outperform well-established workflows in seismology.Here we present a new seismological data set and trained PhaseNet models for picking induced seismicity with deep-learning (piSDL). PhaseNet was trained with 171,182 three component waveforms from 40,576 events. Noise samples were added in the training data set to reduce the number of false picks. In this study, we noticed that a good earthquake training data set and noise samples from the analysed area are both important to detect more seismic events with a newly trained PhaseNet model. We validated our new PhaseNet models at a geothermal site in Rittershoffen (France). The models trained with the new data set and noise samples clearly outperform PhaseNet’s original published model and traditional methods in seismology by detecting up to 62% more events compared to a seismicity catalogue published by an agency.",
+   "citations": 2,
+   "verification": {
+    "ok": true,
+    "target": "https://doi.org/10.26443/seismica.v4i2.1579",
+    "final_url": "https://seismica.library.mcgill.ca/article/view/1579",
+    "http_status": 200,
+    "page_title": "Picking Induced Seismicity with Deep Learning (piSDL) | Seismica",
+    "title_token_match_ratio": 1.0,
+    "bytes": 80162,
+    "fetched_at": "2026-08-13T12:46:05.800234+00:00"
+   },
+   "_theme": "FARFIELD",
+   "_score": 15.5
+  },
+  {
+   "channel": "crossref",
+   "title": "A end-to-end deep learning approach for epicentral distance and magnitude determination from single station waveforms",
+   "authors": [
+    "Pincong Zhang",
+    "Xiong Zhang",
+    "Xiao Tian"
+   ],
+   "year": 2026,
+   "venue": "",
+   "doi": "10.2139/ssrn.6512019",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.2139/ssrn.6512019",
+   "abstract": "Conventional single-station earthquake parameter estimation relies heavily on precise P- and S-wave arrival picking, a dependency that often compromises speed and robustness in real-time scenarios. To overcome these limitations, we propose a Deep Fully Convolutional Encoder-Decoder Network designed for the simultaneous estimation of magnitude and epicentral distance directly from three-component waveform time series. Addressing the conflict between neural network input normalization and the loss of amplitude information required for magnitude scaling, we introduce a pseudo-normalization strategy. This approach normalizes the input waveform to facilitate training while preserving the normalization factor, allowing the network to decouple waveform shape features from amplitude scaling to achieve high-precision magnitude recovery. The normalized waveforms are utilized as neural network’s input to predict the epicentral distance and magnitude contribution which excluding the absolute amplitude. The architecture employs stacked convolutional and pooling layers to automatically extract waveform features, culminating in a probabilistic output layer that models predictions as one-dimensional Gaussian distributions, thereby quantifying estimation uncertainty. Trained on the comprehensive INSTANCE dataset from Italy, the model utilizes a multi-time-window strategy to simulate real-time data streaming. This enables the system to generate immediate estimates upon station triggering and progressively refine predictions as the waveform evolves. Evaluation on the test set yields a Mean Absolute Error (MAE) of 0.1977 for magnitude and 1.67 km for epicentral distance. These results demonstrate that our end-to-end framework achieves rapid, reliable estimation without the need for auxiliary phase picking, offering significant potential for enhancing the Earthquake Early Warning (EEW) systems.",
+   "citations": 0,
+   "verification": {
+    "ok": false,
+    "target": "https://doi.org/10.2139/ssrn.6512019",
+    "final_url": "https://doi.org/10.2139/ssrn.6512019",
+    "http_status": 403,
+    "page_title": "Just a moment...",
+    "title_token_match_ratio": 0.0,
+    "bytes": 5582,
+    "fetched_at": "2026-08-13T12:46:06.635058+00:00"
+   },
+   "_theme": "T2_MAG",
+   "_score": 15.5
+  },
+  {
+   "channel": "openalex+arxiv",
+   "title": "Earthquake magnitude and location estimation from real time seismic waveforms with a transformer network",
+   "authors": [
+    "Jannes Münchmeyer",
+    "Dino Bindi",
+    "Ulf Leser",
+    "Frederik Tilmann"
+   ],
+   "year": 2021,
+   "venue": "Geophysical Journal International",
+   "doi": "10.1093/gji/ggab139",
+   "arxiv_id": "2101.02010v2",
+   "url": "https://doi.org/10.1093/gji/ggab139",
+   "abstract": "SUMMARY Precise real time estimates of earthquake magnitude and location are essential for early warning and rapid response. While recently multiple deep learning approaches for fast assessment of earthquakes have been proposed, they usually rely on either seismic records from a single station or from a fixed set of seismic stations. Here we introduce a new model for real-time magnitude and location estimation using the attention based transformer networks. Our approach incorporates waveforms from a dynamically varying set of stations and outperforms deep learning baselines in both magnitude and location estimation performance. Furthermore, it outperforms a classical magnitude estimation algorithm considerably and shows promising performance in comparison to a classical localization algorithm. Our model is applicable to real-time prediction and provides realistic uncertainty estimates based on probabilistic inference. In this work, we furthermore conduct a comprehensive study of the requirements on training data, the training procedures and the typical failure modes. Using three diverse and large scale data sets, we conduct targeted experiments and a qualitative error analysis. Our analysis gives several key insights. First, we can precisely pinpoint the effect of large training data; for example, a four times larger training set reduces average errors for both magnitude and location prediction by more than half, and reduces the required time for real time assessment by a factor of four. Secondly, the basic model systematically underestimates large magnitude events. This issue can be mitigated, and in some cases completely resolved, by incorporating events from other regions into the training through transfer learning. Thirdly, location estimation is highly precise in areas with sufficient training data, but is strongly degraded for events outside the training distribution, sometimes producing massive outliers. Our analysis suggests that these characteristics are not only present for our model, but for most deep learning models for fast assessment published so far. They result from the black box modeling and their mitigation will likely require imposing physics derived constraints on the neural network. These characteristics need to be taken into consideration for practical applications.",
+   "citations": 124,
+   "verification": {
+    "ok": true,
+    "target": "https://arxiv.org/abs/2101.02010v2",
+    "final_url": "https://arxiv.org/abs/2101.02010v2",
+    "http_status": 200,
+    "page_title": "[2101.02010v2] Earthquake magnitude and location estimation from real time seismic waveforms with a transformer network",
+    "title_token_match_ratio": 1.0,
+    "bytes": 45639,
+    "fetched_at": "2026-08-13T12:46:07.137035+00:00"
+   },
+   "_theme": "T2_MAG",
+   "_score": 15.0
+  },
+  {
+   "channel": "openalex",
+   "title": "Real-time earthquake magnitude prediction using designed machine learning ensemble trained on real and CTGAN generated synthetic data",
+   "authors": [
+    "Anushka Joshi",
+    "Balasubramanian Raman",
+    "C. Krishna Mohan"
+   ],
+   "year": 2025,
+   "venue": "Geodesy and Geodynamics",
+   "doi": "10.1016/j.geog.2024.10.001",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.1016/j.geog.2024.10.001",
+   "abstract": "The earthquake early warning (EEW) system provides advance notice of potentially damaging ground shaking. In EEW, early estimation of magnitude is crucial for timely rescue operations. A set of thirty-four features is extracted using the primary wave earthquake precursor signal and site-specific information. In Japan's earthquake magnitude dataset, there is a chance of a high imbalance concerning the earthquakes above strong impact. This imbalance causes a high prediction error while training advanced machine learning or deep learning models. In this work, Conditional Tabular Generative Adversarial Networks (CTGAN), a deep machine learning tool, is utilized to learn the characteristics of the first arrival of earthquake P-waves and generate a synthetic dataset based on this information. The result obtained using actual and mixed (synthetic and actual) datasets will be used for training the stacked ensemble magnitude prediction model, MagPred, designed specifically for this study. There are 13295, 3989, and 1710 records designated for training, testing, and validation. The mean absolute error of the test dataset for single station magnitude detection using early three, four, and five seconds of P wave are 0.41, 0.40, and 0.38 MJMA. The study demonstrates that the Generative Adversarial Networks (GANs) can provide a good result for single-station magnitude prediction. The study can be effective where less seismic data is available. The study shows that the machine learning method yields better magnitude detection results compared with the several regression models. The multi-station magnitude prediction study has been conducted on prominent Osaka, Off Fukushima, and Kumamoto earthquakes. Furthermore, to validate the performance of the model, an inter-region study has been performed on the earthquakes of the India or Nepal region. The study demonstrates that GANs can discover effective magnitude estimation compared with non-GAN-based methods. This has a high potential for wide application in earthquake early warning systems.",
+   "citations": 18,
+   "verification": {
+    "ok": true,
+    "target": "https://doi.org/10.1016/j.geog.2024.10.001",
+    "final_url": "https://linkinghub.elsevier.com/retrieve/pii/S1674984724001204",
+    "http_status": 200,
+    "page_title": "Redirecting",
+    "title_token_match_ratio": 1.0,
+    "bytes": 2747,
+    "fetched_at": "2026-08-13T12:46:09.406956+00:00"
+   },
+   "_theme": "T2_MAG",
+   "_score": 14.5
+  },
+  {
+   "channel": "crossref",
+   "title": "Rapid magnitude estimation for Taiwan earthquake early warning via frequency-domain multi-station deep learning",
+   "authors": [
+    "Wen-Huai Tsai",
+    "En-Jui Lee",
+    "Da-Yi Chen",
+    "Wu-Yu Liao",
+    "Po Chen"
+   ],
+   "year": 2026,
+   "venue": "Terrestrial, Atmospheric and Oceanic Sciences",
+   "doi": "10.1007/s44195-026-00121-4",
+   "arxiv_id": "",
+   "url": "https://doi.org/10.1007/s44195-026-00121-4",
+   "abstract": "Abstract Accurate and rapid earthquake magnitude estimation is essential for effective Earthquake Early Warning Systems (EEWS), particularly in seismically active regions such as Taiwan. In this study, we propose a frequency-domain multi-station deep learning approach that integrates a Fourier Neural Operator (FNO) and a Long Short-Term Memory (LSTM) network to estimate earthquake magnitudes using near real-time waveform data. The model is trained on 7,025 events recorded by Taiwan’s networks between 2012 and 2024. By jointly analyzing three-component waveforms from the ten nearest stations and incorporating hypocentral distance corrections, the proposed method achieves high accuracy within seconds after the fourth triggered P-wave arrival. Evaluation on a held-out test set demonstrates significant improvements over the current Pd-based single-station method currently used by the Central Weather Administration (CWA), with lower mean absolute error, root mean squared error, and prediction variance. In real EEWS scenarios from January to June 2025, the model consistently outperformed the operational method, even when using early-stage location estimates, and showed further gains when provided with precise hypocenters from the catalog. The proposed approach combines robustness, and computational efficiency, enabling practical deployment in EEWS of Taiwan.",
+   "citations": 1,
+   "verification": {
+    "ok": false,
+    "target": "https://doi.org/10.1007/s44195-026-00121-4",
+    "final_url": "https://link.springer.com/10.1007/s44195-026-00121-4",
+    "http_status": 200,
+    "page_title": "Client Challenge",
+    "title_token_match_ratio": 0.0,
+    "bytes": 3038,
+    "fetched_at": "2026-08-13T12:46:10.025208+00:00"
+   },
+   "_theme": "T2_MAG",
+   "_score": 13.5
+  },
+  {
+   "channel": "arxiv",
+   "title": "Exploring a CNN Model for Earthquake Magnitude Estimation using HR-GNSS data",
+   "authors": [
+    "Claudia Quinteros Cartaya",
+    "Jonas Koehler",
+    "Wei Li",
+    "Johannes Faber",
+    "Nishtha Srivastava"
+   ],
+   "year": 2023,
+   "venue": "",
+   "doi": "",
+   "arxiv_id": "2304.09912v1",
+   "url": "http://arxiv.org/abs/2304.09912v1",
+   "abstract": "High rate Global Navigation Satellite System (HR GNSS) data can be highly useful for earthquake analysis as it provides continuous high-rate measurements of ground motion. This data can be used to estimate the magnitude, to assess the potential of an earthquake for generating tsunamis, and to analyze diverse parameters related to the seismic source. Particularly, in this work, we present the first results of a deep learning model based on a convolutional neural network for earthquake magnitude estimation, using HR GNSS displacement time series. The influence of different dataset configurations, such as station numbers, epicentral distances, signal duration, and earthquake size, were analyzed to figure out how the model can be adapted to various scenarios. We explored the potential of the model for global application and compared its performance using both synthetic and real data from different seismogenic regions. The performance of our model at this stage was satisfactory in estimating earthquake magnitude from synthetic data. Comparable results were observed in tests using synthetic data from a different tectonic region than the training data. Furthermore, the model was tested using real data from different regions and magnitudes, resulting in a good accuracy, provided that the data from a particular group of stations had similar epicentral distance constraints to those used during the model training. The robustness of the DL model can be improved to work independently from the window size of the time series and the number of stations, enabling faster estimation by the model using only near field data. Overall, this study provides insights for the development of future DL approaches for earthquake magnitude estimation with HR-GNSS data, emphasizing the importance of proper handling and careful data selection for further model improvements.",
+   "citations": null,
+   "verification": {
+    "ok": true,
+    "target": "https://arxiv.org/abs/2304.09912v1",
+    "final_url": "https://arxiv.org/abs/2304.09912v1",
+    "http_status": 200,
+    "page_title": "[2304.09912v1] Exploring a CNN Model for Earthquake Magnitude Estimation using HR-GNSS data",
+    "title_token_match_ratio": 1.0,
+    "bytes": 43307,
+    "fetched_at": "2026-08-13T12:46:11.035022+00:00"
+   },
+   "_theme": "T2_MAG",
+   "_score": 13.0
+  }
+ ]
+}
