@@ -100,7 +100,7 @@ GPU>50% 提速，setup.sh 已固定）→ `--overlap` 从 0.5 下调（窗口数
 ```bash
 # 1) 拉回整个仓库（含代码 + 权重备份，总共几 MB，秒级）
 cd /data/coding
-git clone https://github.com/ixijxjgxidj-cmd/dizheng-gpt5.6-sol.git dizheng
+git clone https://github.com/ixijxjgxidj-cmd/chanshui.git dizheng
 cd dizheng
 
 # 2) 一键装环境 + 恢复权重 + GPU 自检（几分钟）

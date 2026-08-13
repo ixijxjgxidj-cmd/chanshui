@@ -3,7 +3,7 @@
 # 云主机一键部署：震相拾取 API（P0 保底上线，2~4 vCPU 的阿里云/华为云 CPU 机即可）
 #
 # 用法（服务器上）：
-#   git clone https://github.com/ixijxjgxidj-cmd/dizheng-gpt5.6-sol.git dizheng && cd dizheng
+#   git clone https://github.com/ixijxjgxidj-cmd/chanshui.git dizheng && cd dizheng
 #   sudo bash deploy/deploy_api.sh
 #
 # 可用环境变量覆盖：

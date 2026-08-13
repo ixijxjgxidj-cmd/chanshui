@@ -32,7 +32,7 @@ echo "==================== [2/6] 仓库代码 ===================="
 if [ -d "$REPO/.git" ]; then
   cd "$REPO" && git pull --ff-only 2>&1 | tail -1
 else
-  git clone https://github.com/ixijxjgxidj-cmd/dizheng-gpt5.6-sol.git "$REPO" 2>&1 | tail -1
+  git clone https://github.com/ixijxjgxidj-cmd/chanshui.git "$REPO" 2>&1 | tail -1
 fi
 cd "$REPO"
 

@@ -1,0 +1,214 @@
+{
+ "n": 11,
+ "rows": [
+  {
+   "tag": "A2-eqt",
+   "title": "Earthquake transformer-an attentive deep-learning model for simultaneous earthquake detection and phase picking",
+   "doi": "10.1038/s41467-020-17591-w",
+   "crossref": {
+    "ok": true,
+    "channel": "crossref-metadata",
+    "target": "https://api.crossref.org/works/10.1038%2Fs41467-020-17591-w",
+    "final_url": "https://api.crossref.org/works/10.1038%2Fs41467-020-17591-w",
+    "http_status": 200,
+    "crossref_title": "Earthquake transformer—an attentive deep-learning model for simultaneous earthquake detection and phase picking",
+    "crossref_year": 2020,
+    "crossref_container": "Nature Communications",
+    "crossref_n_authors": 5,
+    "crossref_cited_by": 957,
+    "title_token_match_ratio": 1.0,
+    "fetched_at": "2026-08-13T11:23:00.894884+00:00"
+   }
+  },
+  {
+   "tag": "A5-bayesunc",
+   "title": "A Deep-Learning Phase Picker with Calibrated Bayesian-Derived Uncertainties for Earthquakes in the Yellowstone Volcanic Region",
+   "doi": "10.1785/0120230068",
+   "crossref": {
+    "ok": true,
+    "channel": "crossref-metadata",
+    "target": "https://api.crossref.org/works/10.1785%2F0120230068",
+    "final_url": "https://api.crossref.org/works/10.1785%2F0120230068",
+    "http_status": 200,
+    "crossref_title": "A Deep-Learning Phase Picker with Calibrated Bayesian-Derived Uncertainties for Earthquakes in the Yellowstone Volcanic Region",
+    "crossref_year": 2023,
+    "crossref_container": "Bulletin of the Seismological Society of America",
+    "crossref_n_authors": 4,
+    "crossref_cited_by": 11,
+    "title_token_match_ratio": 1.0,
+    "fetched_at": "2026-08-13T11:23:02.604140+00:00"
+   }
+  },
+  {
+   "tag": "A6-softlabel-icc",
+   "title": "Capturing expert uncertainty: ICC-informed soft labelling for volcano-seismicity",
+   "doi": "10.1007/s00445-025-01875-4",
+   "crossref": {
+    "ok": true,
+    "channel": "crossref-metadata",
+    "target": "https://api.crossref.org/works/10.1007%2Fs00445-025-01875-4",
+    "final_url": "https://api.crossref.org/works/10.1007%2Fs00445-025-01875-4",
+    "http_status": 200,
+    "crossref_title": "Capturing expert uncertainty: ICC-informed soft labelling for volcano-seismicity",
+    "crossref_year": 2025,
+    "crossref_container": "Bulletin of Volcanology",
+    "crossref_n_authors": 5,
+    "crossref_cited_by": 0,
+    "title_token_match_ratio": 1.0,
+    "fetched_at": "2026-08-13T11:23:04.502482+00:00"
+   }
+  },
+  {
+   "tag": "A7-arru",
+   "title": "ARRU Phase Picker: Attention Recurrent-Residual U-Net for Picking Seismic P- and S-Phase Arrivals",
+   "doi": "10.1785/0220200382",
+   "crossref": {
+    "ok": true,
+    "channel": "crossref-metadata",
+    "target": "https://api.crossref.org/works/10.1785%2F0220200382",
+    "final_url": "https://api.crossref.org/works/10.1785%2F0220200382",
+    "http_status": 200,
+    "crossref_title": "ARRU Phase Picker: Attention Recurrent-Residual U-Net for Picking Seismic<i>P</i>- and<i>S</i>-Phase Arrivals",
+    "crossref_year": 2021,
+    "crossref_container": "Seismological Research Letters",
+    "crossref_n_authors": 5,
+    "crossref_cited_by": 43,
+    "title_token_match_ratio": 1.0,
+    "fetched_at": "2026-08-13T11:23:05.998168+00:00"
+   }
+  },
+  {
+   "tag": "A8-whichpicker",
+   "title": "Which picker fits my data? A quantitative evaluation of deep learning based seismic pickers",
+   "doi": "10.1029/2021JB023499",
+   "crossref": {
+    "ok": true,
+    "channel": "crossref-metadata",
+    "target": "https://api.crossref.org/works/10.1029%2F2021JB023499",
+    "final_url": "https://api.crossref.org/works/10.1029%2F2021JB023499",
+    "http_status": 200,
+    "crossref_title": "Which Picker Fits My Data? A Quantitative Evaluation of Deep Learning Based Seismic Pickers",
+    "crossref_year": 2022,
+    "crossref_container": "Journal of Geophysical Research: Solid Earth",
+    "crossref_n_authors": 13,
+    "crossref_cited_by": 185,
+    "title_token_match_ratio": 1.0,
+    "fetched_at": "2026-08-13T11:23:07.302054+00:00"
+   }
+  },
+  {
+   "tag": "A10-nabro",
+   "title": "A Little Data Goes a Long Way: Automating Seismic Phase Arrival Picking at Nabro Volcano With Transfer Learning",
+   "doi": "10.1029/2021jb021910",
+   "crossref": {
+    "ok": true,
+    "channel": "crossref-metadata",
+    "target": "https://api.crossref.org/works/10.1029%2F2021jb021910",
+    "final_url": "https://api.crossref.org/works/10.1029%2F2021jb021910",
+    "http_status": 200,
+    "crossref_title": "A Little Data Goes a Long Way: Automating Seismic Phase Arrival Picking at Nabro Volcano With Transfer Learning",
+    "crossref_year": 2021,
+    "crossref_container": "Journal of Geophysical Research: Solid Earth",
+    "crossref_n_authors": 6,
+    "crossref_cited_by": 67,
+    "title_token_match_ratio": 1.0,
+    "fetched_at": "2026-08-13T11:23:08.750308+00:00"
+   }
+  },
+  {
+   "tag": "A11-bridgescales",
+   "title": "Using a Deep Neural Network and Transfer Learning to Bridge Scales for Seismic Phase Picking",
+   "doi": "10.1029/2020gl088651",
+   "crossref": {
+    "ok": true,
+    "channel": "crossref-metadata",
+    "target": "https://api.crossref.org/works/10.1029%2F2020gl088651",
+    "final_url": "https://api.crossref.org/works/10.1029%2F2020gl088651",
+    "http_status": 200,
+    "crossref_title": "Using a Deep Neural Network and Transfer Learning to Bridge Scales for Seismic Phase Picking",
+    "crossref_year": 2020,
+    "crossref_container": "Geophysical Research Letters",
+    "crossref_n_authors": 9,
+    "crossref_cited_by": 138,
+    "title_token_match_ratio": 1.0,
+    "fetched_at": "2026-08-13T11:23:10.101147+00:00"
+   }
+  },
+  {
+   "tag": "A12-labquakes",
+   "title": "From Labquakes to Megathrusts: Scaling Deep Learning Based Pickers Over 15 Orders of Magnitude",
+   "doi": "10.1029/2024jh000220",
+   "crossref": {
+    "ok": true,
+    "channel": "crossref-metadata",
+    "target": "https://api.crossref.org/works/10.1029%2F2024jh000220",
+    "final_url": "https://api.crossref.org/works/10.1029%2F2024jh000220",
+    "http_status": 200,
+    "crossref_title": "From Labquakes to Megathrusts: Scaling Deep Learning Based Pickers Over 15 Orders of Magnitude",
+    "crossref_year": 2024,
+    "crossref_container": "Journal of Geophysical Research: Machine Learning and Computation",
+    "crossref_n_authors": 12,
+    "crossref_cited_by": 9,
+    "title_token_match_ratio": 1.0,
+    "fetched_at": "2026-08-13T11:23:11.547929+00:00"
+   }
+  },
+  {
+   "tag": "A14-pickblue",
+   "title": "PickBlue: Seismic Phase Picking for Ocean Bottom Seismometers With Deep Learning",
+   "doi": "10.1029/2023ea003332",
+   "crossref": {
+    "ok": true,
+    "channel": "crossref-metadata",
+    "target": "https://api.crossref.org/works/10.1029%2F2023ea003332",
+    "final_url": "https://api.crossref.org/works/10.1029%2F2023ea003332",
+    "http_status": 200,
+    "crossref_title": "PickBlue: Seismic Phase Picking for Ocean Bottom Seismometers With Deep Learning",
+    "crossref_year": 2023,
+    "crossref_container": "Earth and Space Science",
+    "crossref_n_authors": 8,
+    "crossref_cited_by": 41,
+    "title_token_match_ratio": 1.0,
+    "fetched_at": "2026-08-13T11:23:12.905094+00:00"
+   }
+  },
+  {
+   "tag": "A18-dasformer",
+   "title": "DASFormer: self-supervised pretraining for earthquake monitoring",
+   "doi": "10.1007/s44267-025-00085-y",
+   "crossref": {
+    "ok": true,
+    "channel": "crossref-metadata",
+    "target": "https://api.crossref.org/works/10.1007%2Fs44267-025-00085-y",
+    "final_url": "https://api.crossref.org/works/10.1007%2Fs44267-025-00085-y",
+    "http_status": 200,
+    "crossref_title": "DASFormer: self-supervised pretraining for earthquake monitoring",
+    "crossref_year": 2025,
+    "crossref_container": "Visual Intelligence",
+    "crossref_n_authors": 4,
+    "crossref_cited_by": 4,
+    "title_token_match_ratio": 1.0,
+    "fetched_at": "2026-08-13T11:23:14.445287+00:00"
+   }
+  },
+  {
+   "tag": "A20-phaselink",
+   "title": "PhaseLink: A Deep Learning Approach to Seismic Phase Association",
+   "doi": "10.1029/2018JB016674",
+   "crossref": {
+    "ok": true,
+    "channel": "crossref-metadata",
+    "target": "https://api.crossref.org/works/10.1029%2F2018JB016674",
+    "final_url": "https://api.crossref.org/works/10.1029%2F2018JB016674",
+    "http_status": 200,
+    "crossref_title": "PhaseLink: A Deep Learning Approach to Seismic Phase Association",
+    "crossref_year": 2019,
+    "crossref_container": "Journal of Geophysical Research: Solid Earth",
+    "crossref_n_authors": 5,
+    "crossref_cited_by": 197,
+    "title_token_match_ratio": 1.0,
+    "fetched_at": "2026-08-13T11:23:15.886977+00:00"
+   }
+  }
+ ]
+}

@@ -11,7 +11,7 @@ seisbench 的每请求 ~2.7MB 原生内存泄漏（实测 300 请求增长从 ~9
 实测，见 `deploy/EVAL_DAY.md` T-1 的内存 soak 项）。
 
 ```bash
-git clone https://github.com/ixijxjgxidj-cmd/dizheng-gpt5.6-sol.git dizheng
+git clone https://github.com/ixijxjgxidj-cmd/chanshui.git dizheng
 cd dizheng
 sudo bash deploy/deploy_api.sh
 ```

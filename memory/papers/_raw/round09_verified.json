@@ -1,0 +1,406 @@
+{
+  "n_total": 25,
+  "n_ok": 14,
+  "rows": [
+    {
+      "tag": "A1-phasenet",
+      "title": "PhaseNet: A Deep-Neural-Network-Based Seismic Arrival Time Picking Method",
+      "arxiv_id": "1803.03211",
+      "doi": "10.1093/gji/ggy423",
+      "verification": {
+        "ok": true,
+        "target": "https://arxiv.org/abs/1803.03211",
+        "final_url": "https://arxiv.org/abs/1803.03211",
+        "http_status": 200,
+        "page_title": "[1803.03211] PhaseNet: A Deep-Neural-Network-Based Seismic Arrival Time Picking Method",
+        "title_token_match_ratio": 1.0,
+        "bytes": 42358,
+        "fetched_at": "2026-08-13T10:38:18.716128+00:00"
+      }
+    },
+    {
+      "tag": "A2-eqt",
+      "title": "Earthquake transformer-an attentive deep-learning model for simultaneous earthquake detection and phase picking",
+      "arxiv_id": "",
+      "doi": "10.1038/s41467-020-17591-w",
+      "verification": {
+        "ok": false,
+        "target": "https://doi.org/10.1038/s41467-020-17591-w",
+        "final_url": "https://www.nature.com/articles/s41467-020-17591-w",
+        "http_status": 200,
+        "page_title": "Client Challenge",
+        "title_token_match_ratio": 0.0,
+        "bytes": 3038,
+        "fetched_at": "2026-08-13T10:38:19.327842+00:00"
+      }
+    },
+    {
+      "tag": "A3-labelinacc",
+      "title": "Learning Earthquake Wave Arrival Time Picking from Labels with Inaccuracies",
+      "arxiv_id": "2606.15377",
+      "doi": "",
+      "verification": {
+        "ok": true,
+        "target": "https://arxiv.org/abs/2606.15377",
+        "final_url": "https://arxiv.org/abs/2606.15377",
+        "http_status": 200,
+        "page_title": "[2606.15377] Learning Earthquake Wave Arrival Time Picking from Labels with Inaccuracies",
+        "title_token_match_ratio": 1.0,
+        "bytes": 43084,
+        "fetched_at": "2026-08-13T10:38:19.634520+00:00"
+      }
+    },
+    {
+      "tag": "A4-labelimb",
+      "title": "Improving Deep Learning-Based Seismic Phase Picking by Addressing Label Imbalance",
+      "arxiv_id": "",
+      "doi": "10.21203/rs.3.rs-10439246/v1",
+      "verification": {
+        "ok": true,
+        "target": "https://doi.org/10.21203/rs.3.rs-10439246/v1",
+        "final_url": "https://www.researchsquare.com/article/rs-10439246/v1",
+        "http_status": 200,
+        "page_title": "Improving Deep Learning-Based Seismic Phase Picking by Addressing Label Imbalance | Research Square",
+        "title_token_match_ratio": 1.0,
+        "bytes": 65782,
+        "fetched_at": "2026-08-13T10:38:21.089674+00:00"
+      }
+    },
+    {
+      "tag": "A5-bayesunc",
+      "title": "A Deep-Learning Phase Picker with Calibrated Bayesian-Derived Uncertainties for Earthquakes in the Yellowstone Volcanic Region",
+      "arxiv_id": "",
+      "doi": "10.1785/0120230068",
+      "verification": {
+        "ok": false,
+        "target": "https://doi.org/10.1785/0120230068",
+        "final_url": "https://doi.org/10.1785/0120230068",
+        "http_status": 403,
+        "page_title": "Just a moment...",
+        "title_token_match_ratio": 0.4615,
+        "bytes": 5810,
+        "fetched_at": "2026-08-13T10:38:21.783197+00:00"
+      }
+    },
+    {
+      "tag": "A6-softlabel-icc",
+      "title": "Capturing expert uncertainty: ICC-informed soft labelling for volcano-seismicity",
+      "arxiv_id": "",
+      "doi": "10.1007/s00445-025-01875-4",
+      "verification": {
+        "ok": false,
+        "target": "https://doi.org/10.1007/s00445-025-01875-4",
+        "final_url": "https://link.springer.com/10.1007/s00445-025-01875-4",
+        "http_status": 200,
+        "page_title": "Client Challenge",
+        "title_token_match_ratio": 0.0,
+        "bytes": 3038,
+        "fetched_at": "2026-08-13T10:38:22.635828+00:00"
+      }
+    },
+    {
+      "tag": "A7-arru",
+      "title": "ARRU Phase Picker: Attention Recurrent-Residual U-Net for Picking Seismic P- and S-Phase Arrivals",
+      "arxiv_id": "",
+      "doi": "10.1785/0220200382",
+      "verification": {
+        "ok": false,
+        "target": "https://doi.org/10.1785/0220200382",
+        "final_url": "https://doi.org/10.1785/0220200382",
+        "http_status": 403,
+        "page_title": "Just a moment...",
+        "title_token_match_ratio": 0.6667,
+        "bytes": 5816,
+        "fetched_at": "2026-08-13T10:38:23.233399+00:00"
+      }
+    },
+    {
+      "tag": "A8-whichpicker",
+      "title": "Which picker fits my data? A quantitative evaluation of deep learning based seismic pickers",
+      "arxiv_id": "",
+      "doi": "10.1029/2021JB023499",
+      "verification": {
+        "ok": false,
+        "target": "https://doi.org/10.1029/2021JB023499",
+        "final_url": "https://doi.org/10.1029/2021JB023499",
+        "http_status": 403,
+        "page_title": "Just a moment...",
+        "title_token_match_ratio": 0.0,
+        "bytes": 5665,
+        "fetched_at": "2026-08-13T10:38:23.871231+00:00"
+      }
+    },
+    {
+      "tag": "A9-seislm",
+      "title": "SeisLM: a Foundation Model for Seismic Waveforms",
+      "arxiv_id": "2410.15765",
+      "doi": "",
+      "verification": {
+        "ok": true,
+        "target": "https://arxiv.org/abs/2410.15765",
+        "final_url": "https://arxiv.org/abs/2410.15765",
+        "http_status": 200,
+        "page_title": "[2410.15765] SeisLM: a Foundation Model for Seismic Waveforms",
+        "title_token_match_ratio": 1.0,
+        "bytes": 40396,
+        "fetched_at": "2026-08-13T10:38:24.416375+00:00"
+      }
+    },
+    {
+      "tag": "A10-nabro",
+      "title": "A Little Data Goes a Long Way: Automating Seismic Phase Arrival Picking at Nabro Volcano With Transfer Learning",
+      "arxiv_id": "",
+      "doi": "10.1029/2021jb021910",
+      "verification": {
+        "ok": false,
+        "target": "https://doi.org/10.1029/2021jb021910",
+        "final_url": "https://doi.org/10.1029/2021jb021910",
+        "http_status": 403,
+        "page_title": "Just a moment...",
+        "title_token_match_ratio": 0.0,
+        "bytes": 5665,
+        "fetched_at": "2026-08-13T10:38:25.014671+00:00"
+      }
+    },
+    {
+      "tag": "A11-bridgescales",
+      "title": "Using a Deep Neural Network and Transfer Learning to Bridge Scales for Seismic Phase Picking",
+      "arxiv_id": "",
+      "doi": "10.1029/2020gl088651",
+      "verification": {
+        "ok": false,
+        "target": "https://doi.org/10.1029/2020gl088651",
+        "final_url": "https://doi.org/10.1029/2020gl088651",
+        "http_status": 403,
+        "page_title": "Just a moment...",
+        "title_token_match_ratio": 0.0,
+        "bytes": 5665,
+        "fetched_at": "2026-08-13T10:38:25.633024+00:00"
+      }
+    },
+    {
+      "tag": "A12-labquakes",
+      "title": "From Labquakes to Megathrusts: Scaling Deep Learning Based Pickers Over 15 Orders of Magnitude",
+      "arxiv_id": "",
+      "doi": "10.1029/2024jh000220",
+      "verification": {
+        "ok": false,
+        "target": "https://doi.org/10.1029/2024jh000220",
+        "final_url": "https://doi.org/10.1029/2024jh000220",
+        "http_status": 403,
+        "page_title": "Just a moment...",
+        "title_token_match_ratio": 0.0,
+        "bytes": 5665,
+        "fetched_at": "2026-08-13T10:38:26.235643+00:00"
+      }
+    },
+    {
+      "tag": "A13-customlocal",
+      "title": "Customization of a deep neural network using local data for seismic phase picking",
+      "arxiv_id": "",
+      "doi": "10.3389/feart.2023.1306488",
+      "verification": {
+        "ok": true,
+        "target": "https://doi.org/10.3389/feart.2023.1306488",
+        "final_url": "https://www.frontiersin.org/journals/earth-science/articles/10.3389/feart.2023.1306488/full",
+        "http_status": 200,
+        "page_title": "Frontiers | Customization of a deep neural network using local data for seismic phase picking",
+        "title_token_match_ratio": 1.0,
+        "bytes": 937001,
+        "fetched_at": "2026-08-13T10:38:30.280590+00:00"
+      }
+    },
+    {
+      "tag": "A14-pickblue",
+      "title": "PickBlue: Seismic Phase Picking for Ocean Bottom Seismometers With Deep Learning",
+      "arxiv_id": "",
+      "doi": "10.1029/2023ea003332",
+      "verification": {
+        "ok": false,
+        "target": "https://doi.org/10.1029/2023ea003332",
+        "final_url": "https://doi.org/10.1029/2023ea003332",
+        "http_status": 403,
+        "page_title": "Just a moment...",
+        "title_token_match_ratio": 0.0,
+        "bytes": 5665,
+        "fetched_at": "2026-08-13T10:38:30.829343+00:00"
+      }
+    },
+    {
+      "tag": "A15-obstransformer",
+      "title": "OBSTransformer: a deep-learning seismic phase picker for OBS data using automated labelling",
+      "arxiv_id": "2306.04753",
+      "doi": "10.1093/gji/ggae049",
+      "verification": {
+        "ok": true,
+        "target": "https://arxiv.org/abs/2306.04753",
+        "final_url": "https://arxiv.org/abs/2306.04753",
+        "http_status": 200,
+        "page_title": "[2306.04753] OBSTransformer: A Deep-Learning Seismic Phase Picker for OBS Data Using Automated Labelling and Transfer Learning",
+        "title_token_match_ratio": 1.0,
+        "bytes": 42931,
+        "fetched_at": "2026-08-13T10:38:31.230670+00:00"
+      }
+    },
+    {
+      "tag": "A16-das-semisup",
+      "title": "Seismic arrival-time picking on distributed acoustic sensing data using semi-supervised learning",
+      "arxiv_id": "2302.08747",
+      "doi": "10.1038/s41467-023-43355-3",
+      "verification": {
+        "ok": true,
+        "target": "https://arxiv.org/abs/2302.08747",
+        "final_url": "https://arxiv.org/abs/2302.08747",
+        "http_status": 200,
+        "page_title": "[2302.08747] Seismic Arrival-time Picking on Distributed Acoustic Sensing Data using Semi-supervised Learning",
+        "title_token_match_ratio": 1.0,
+        "bytes": 44109,
+        "fetched_at": "2026-08-13T10:38:31.661608+00:00"
+      }
+    },
+    {
+      "tag": "A17-csesnet",
+      "title": "CSESnet: A deep learning P-wave detection model based on UNet++ designed for China Seismic Experimental Site",
+      "arxiv_id": "",
+      "doi": "10.3389/feart.2022.1032839",
+      "verification": {
+        "ok": true,
+        "target": "https://doi.org/10.3389/feart.2022.1032839",
+        "final_url": "https://www.frontiersin.org/journals/earth-science/articles/10.3389/feart.2022.1032839/full",
+        "http_status": 200,
+        "page_title": "Frontiers | CSESnet: A deep learning P-wave detection model based on UNet++ designed for China Seismic Experimental Site",
+        "title_token_match_ratio": 1.0,
+        "bytes": 766162,
+        "fetched_at": "2026-08-13T10:38:36.437956+00:00"
+      }
+    },
+    {
+      "tag": "A18-dasformer",
+      "title": "DASFormer: self-supervised pretraining for earthquake monitoring",
+      "arxiv_id": "",
+      "doi": "10.1007/s44267-025-00085-y",
+      "verification": {
+        "ok": false,
+        "target": "https://doi.org/10.1007/s44267-025-00085-y",
+        "final_url": "https://link.springer.com/10.1007/s44267-025-00085-y",
+        "http_status": 200,
+        "page_title": "Client Challenge",
+        "title_token_match_ratio": 0.0,
+        "bytes": 3038,
+        "fetched_at": "2026-08-13T10:38:37.082514+00:00"
+      }
+    },
+    {
+      "tag": "A19-multievent",
+      "title": "Toward Robust Seismic Phase Picking in Realistic Multi-Event Scenarios",
+      "arxiv_id": "",
+      "doi": "10.5194/egusphere-egu26-6122",
+      "verification": {
+        "ok": true,
+        "target": "https://doi.org/10.5194/egusphere-egu26-6122",
+        "final_url": "https://meetingorganizer.copernicus.org/EGU26/EGU26-6122.html",
+        "http_status": 200,
+        "page_title": "Abstract EGU26-6122",
+        "title_token_match_ratio": 1.0,
+        "bytes": 154869,
+        "fetched_at": "2026-08-13T10:38:39.588866+00:00"
+      }
+    },
+    {
+      "tag": "A20-phaselink",
+      "title": "PhaseLink: A Deep Learning Approach to Seismic Phase Association",
+      "arxiv_id": "",
+      "doi": "10.1029/2018JB016674",
+      "verification": {
+        "ok": false,
+        "target": "https://doi.org/10.1029/2018JB016674",
+        "final_url": "https://doi.org/10.1029/2018JB016674",
+        "http_status": 403,
+        "page_title": "Just a moment...",
+        "title_token_match_ratio": 0.0,
+        "bytes": 5665,
+        "fetched_at": "2026-08-13T10:38:40.254669+00:00"
+      }
+    },
+    {
+      "tag": "B1-darkpose",
+      "title": "Distribution-Aware Coordinate Representation for Human Pose Estimation",
+      "arxiv_id": "1910.06278",
+      "doi": "",
+      "verification": {
+        "ok": true,
+        "target": "https://arxiv.org/abs/1910.06278",
+        "final_url": "https://arxiv.org/abs/1910.06278",
+        "http_status": 200,
+        "page_title": "[1910.06278] Distribution-Aware Coordinate Representation for Human Pose Estimation",
+        "title_token_match_ratio": 1.0,
+        "bytes": 43121,
+        "fetched_at": "2026-08-13T10:38:40.695088+00:00"
+      }
+    },
+    {
+      "tag": "B2-udp",
+      "title": "The Devil is in the Details: Delving into Unbiased Data Processing for Human Pose Estimation",
+      "arxiv_id": "1911.07524",
+      "doi": "",
+      "verification": {
+        "ok": true,
+        "target": "https://arxiv.org/abs/1911.07524",
+        "final_url": "https://arxiv.org/abs/1911.07524",
+        "http_status": 200,
+        "page_title": "[1911.07524] The Devil is in the Details: Delving into Unbiased Data Processing for Human Pose Estimation",
+        "title_token_match_ratio": 1.0,
+        "bytes": 44325,
+        "fetched_at": "2026-08-13T10:38:41.123188+00:00"
+      }
+    },
+    {
+      "tag": "B3-rethinkheatmap",
+      "title": "Rethinking the Heatmap Regression for Bottom-up Human Pose Estimation",
+      "arxiv_id": "2012.15175",
+      "doi": "",
+      "verification": {
+        "ok": true,
+        "target": "https://arxiv.org/abs/2012.15175",
+        "final_url": "https://arxiv.org/abs/2012.15175",
+        "http_status": 200,
+        "page_title": "[2012.15175] Rethinking the Heatmap Regression for Bottom-up Human Pose Estimation",
+        "title_token_match_ratio": 1.0,
+        "bytes": 43276,
+        "fetched_at": "2026-08-13T10:38:41.607077+00:00"
+      }
+    },
+    {
+      "tag": "B4-kd-bias-var",
+      "title": "Rethinking Soft Labels for Knowledge Distillation: A Bias-Variance Tradeoff Perspective",
+      "arxiv_id": "2102.00650",
+      "doi": "",
+      "verification": {
+        "ok": true,
+        "target": "https://arxiv.org/abs/2102.00650",
+        "final_url": "https://arxiv.org/abs/2102.00650",
+        "http_status": 200,
+        "page_title": "[2102.00650] Rethinking Soft Labels for Knowledge Distillation: A Bias-Variance Tradeoff Perspective",
+        "title_token_match_ratio": 1.0,
+        "bytes": 45172,
+        "fetched_at": "2026-08-13T10:38:42.193074+00:00"
+      }
+    },
+    {
+      "tag": "B5-lsr-kd",
+      "title": "Revisiting Knowledge Distillation via Label Smoothing Regularization",
+      "arxiv_id": "1909.11723",
+      "doi": "",
+      "verification": {
+        "ok": true,
+        "target": "https://arxiv.org/abs/1909.11723",
+        "final_url": "https://arxiv.org/abs/1909.11723",
+        "http_status": 200,
+        "page_title": "[1909.11723] Revisiting Knowledge Distillation via Label Smoothing Regularization",
+        "title_token_match_ratio": 1.0,
+        "bytes": 45013,
+        "fetched_at": "2026-08-13T10:38:42.511134+00:00"
+      }
+    }
+  ]
+}

@@ -58,3 +58,12 @@ weights/ustc_pickers/*
 weights/geofon/*
 !weights/geofon/geofon_m1_last_sd.pt
 !weights/geofon/geofon_m3_last_sd.pt
+
+# 外部工具克隆与本地 skills（非本项目交付物；superpowers-zh 自带 .git，禁止变成 gitlink）
+superpowers-zh/
+.codex/
+
+# 论文检索原始转储（可由 scripts/lit_search.py 重跑；仅提交核验结论 JSON）
+memory/papers/_raw/round09_q_*.json
+memory/papers/_raw/round09_scored.json
+memory/papers/_raw/round09_verify_probe.json

@@ -6,6 +6,31 @@
 
 项目已有可复现的三任务冻结生产版本：T1 七成员概率集成、T2/T3 SeismicXM 特征模型、统一冻结基线和历史发布证据链均已完成。第 2–6 轮候选、已有 T1 候选四口径重排、第 7 轮基础 PhaseNet 蒸馏和第 8 轮包—记录层级等权蒸馏均未通过生产准入。层级等权候选在三折权重守恒、held-out 屏障和完整推理上全部通过，但 12 单元 worst/mean 为 `-8.6889/-3.3602`，仅 2/12 正向；它把 R1 默认回退缩至 `-2.3222`，却使 R2/08 变为 `-5.1944/-8.6889`，7 条长记录只有 1 条上涨。生产继续冻结 `g7`。没有真正独立的新包或官方规则变化时，应停止围绕相同三包继续扫描蒸馏权重、层级权重、截断或长度分段；当前服务器只承担训练、特征生成和实验计算，不作为最终部署服务器。公开数据可在线流式读取、按需缓存或完整下载，不要求预先离线化。
 
+## 合规缺陷（2026-08-13 实测，最高优先级）
+
+用户目标语句把四个包（`08-an.zip`、`08-exam.zip`、第 1 轮、第 2 轮）全部列为「测试数据集永远不参与模型微调与训练」。按此口径，以下三处生产默认**违规**：
+
+| 资产 | 角色 | 违规证据 |
+|---|---|---|
+| `weights/aug/exam_aug6_r2train_sd.pt` | T1 集成成员 4 | 由 `outputs/train/r2train.h5` 微调；该池实测 1001 窗、来自 915 个互不相同的 `source_file`（`T1.A.Q0001.mseed` …），恰为第 2 轮 T1 文件数 |
+| `weights/aug/crew_sp23_r2train_sd.pt` | T1 集成成员 5 | 同上；`deploy/WEEK_TRAINING_RUNBOOK.md` 记为「R2 真题锚点池」，同时用作 `--holdout` 与混池训练输入 |
+| `weights/official_r1_to_r2/t2_seismicxm_r1r2.joblib`、`t3_seismicxm_r1r2.joblib` | `serve_api.py` 的 T2/T3 默认模型 | `scripts/train_seismicxm_t2.py:71`、`train_seismicxm_t3.py:74` 为 `fit(vstack([X_r1, X_r2]), concat([y_r1, y_r2]))` |
+
+`AGENTS.md` 第 2 条写有「第 1、2 轮比赛数据……可按预注册协议参与实验」，与用户目标语句直接冲突。`git log -- AGENTS.md` 显示该句由本项目自身提交（`d1d7d52`→`75c17c6`，2026-08-12/13）加入，非用户撰写。**以用户指令为准**：R1/R2 自 2026-08-13 起为训练禁用，只可用于「不回归检查」。既有冻结资产保留不删除，但不得进入任何新发布清单。
+
+赛区变更（本届广西地震局，去年四川地震局，去年数据仅供参考）使上述资产同时存在**第二重失效**：它们是四川域拟合物。
+
+### 合规替换的实测代价：可忽略
+
+同一冻结生产参数下（`cap_short_s=300 cap_max_p=1 cap_max_s=1 long_snr_db=-1 force_pair_mode=conditional long_dedup_s=20 ensemble_long_members=5`），R1/R2 仅作不回归检查：
+
+| 配置 | 成员 | R1 | R2 |
+|---|---|---:|---:|
+| P0 生产冻结（含违规成员） | guangxi,jiangxi,shandong,exam_aug6_r2train,crew_sp23_r2train,geofon_m1,geofon_m3 | 1.786294 | 1.810140 |
+| C1 最小合规替换 | guangxi,jiangxi,shandong,huanan,geofon_m2,geofon_m1,geofon_m3 | 1.786522 | 1.806667 |
+| C2 华南域先验（去 shandong） | guangxi,huanan,jiangxi,guizhou,hunan,geofon_m1,geofon_m3 | 1.783983 | 1.811840 |
+
+移除两个违规成员后 R1/R2 变化在 ±0.004 内；C2 在 R2 上高于 P0。**合规不带来可测代价。**
 ## 已核验的生产状态
 
 - Git 主分支：`main`。
@@ -14,7 +39,7 @@
 - 第 4 轮结果 `90ff84f`、发布硬化 `ee2337a`、第 5 轮 gap mask 否证 `d4a311d`、第 6 轮 annotation 否证 `bbf6e45`、watchdog 隔离 `c5153be` 与跨用户日志修复 `baa6f77` 均已推送 GitHub。负实验没有进入生产推理路径。
 - watchdog 服务器双向验收、cron 与真实回滚/再前滚记录提交 `b5f2afb214dde406f6b62d68e1ea2f35e19619e1` 已成功推送到 GitHub `origin/main`；后续状态提交不改变生产推理。
 - 最终统一复评与公网代表样本记录提交 `141d514c4dafb1b3523325cc56337a2a610072f5` 已成功推送到 GitHub `origin/main`；它只增加冻结证据与 memory，不改变生产推理。
-- 唯一远端：`https://github.com/ixijxjgxidj-cmd/dizheng-gpt5.6-sol.git`。
+- 唯一远端：`https://github.com/ixijxjgxidj-cmd/chanshui.git`。
 - 当前训练服务器的职责已收窄为训练、特征生成和实验计算，不承担最终生产部署；公开数据允许在线流式读取、按需缓存或完整下载。后续 Git 快进仅为运行实验代码，不触发服务、systemd、cron、捕获或发布操作。
 - 上次核验时服务器工作区干净；新的专用 SSH 密钥已通过 `BatchMode` 直连验证，备用代理未使用。凭据本身不进入仓库或 memory。
 - `phasepick-api` 是系统级 systemd unit，`active` 且 `enabled`，但进程以普通用户运行。
