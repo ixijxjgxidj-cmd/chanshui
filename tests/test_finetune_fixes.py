@@ -224,6 +224,35 @@ def test_fallback_alarm_threshold():
     assert not fallback_alarm(0, 0)
 
 
+def test_configure_trainable_scope_out_only():
+    import torch
+
+    class Tiny(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.body = torch.nn.Conv1d(3, 4, 3)
+            self.out = torch.nn.Conv1d(4, 3, 1)
+
+    model = Tiny()
+    names = ftp.configure_trainable_scope(model, "out")
+    assert names == ["out.weight", "out.bias"]
+    assert not model.body.weight.requires_grad
+    assert model.out.weight.requires_grad
+    assert set(ftp.configure_trainable_scope(model, "all")) == {
+        name for name, _ in model.named_parameters()
+    }
+
+
+def test_checkpoint_selection_path():
+    assert ftp.checkpoint_selection_path("last", "last.pt", "best.pt") == "last.pt"
+    assert ftp.checkpoint_selection_path("best", "last.pt", "best.pt") == "best.pt"
+    try:
+        ftp.checkpoint_selection_path("invalid", "last.pt", "best.pt")
+        assert False, "invalid selection must fail"
+    except ValueError:
+        pass
+
+
 if __name__ == "__main__":
     for fn in [
         test_cut_window_joint_keeps_both_phases_with_margin,
@@ -238,6 +267,8 @@ if __name__ == "__main__":
         test_load_checkpoint_state_with_np_scalars,
         test_singleton_fraction_detects_degenerate_split,
         test_fallback_alarm_threshold,
+        test_configure_trainable_scope_out_only,
+        test_checkpoint_selection_path,
     ]:
         fn()
         print(f"{fn.__name__} ok")

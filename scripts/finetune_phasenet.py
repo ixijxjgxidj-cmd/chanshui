@@ -30,6 +30,7 @@ from phasepicker.defaults import (  # noqa: E402
     DEFAULT_PRETRAINED,
     DEFAULT_S_THRESHOLD,
 )
+from phasepicker.training.data_policy import assert_experiment_path_allowed  # noqa: E402
 
 # ============ 内嵌评分（与已测 scorer 一字不差）============
 _PHASE = {"P": (0.1, 1.0), "S": (0.2, 2.0)}
@@ -178,6 +179,29 @@ def set_safe_finetune_mode(model, update_bn=False):
                 p.requires_grad = False
         if isinstance(module, torch.nn.modules.dropout._DropoutNd):
             module.eval()
+
+
+def configure_trainable_scope(model, scope="all"):
+    """Freeze model parameters according to a preregistered fine-tuning scope."""
+    if scope not in {"all", "out"}:
+        raise ValueError(f"unsupported trainable scope: {scope}")
+    for parameter in model.parameters():
+        parameter.requires_grad = scope == "all"
+    if scope == "out":
+        for parameter in model.out.parameters():
+            parameter.requires_grad = True
+    names = [name for name, parameter in model.named_parameters() if parameter.requires_grad]
+    if not names:
+        raise ValueError(f"trainable scope {scope!r} selected no parameters")
+    return names
+
+
+def checkpoint_selection_path(selection, last_path, best_path):
+    if selection == "last":
+        return last_path
+    if selection == "best":
+        return best_path
+    raise ValueError(f"unsupported checkpoint selection: {selection}")
 
 def save_checkpoint(path, model, opt, epoch, loss, best_score, args, extra=None):
     import torch
@@ -440,6 +464,10 @@ def main():
     ap.add_argument("--grad-clip", type=float, default=1.0, help="梯度裁剪阈值；<=0 表示关闭")
     ap.add_argument("--update-bn", action="store_true", help="允许更新 BatchNorm running stats（默认冻结，防小样本冲坏）")
     ap.add_argument("--score-every", type=int, default=1, help="每多少 epoch 跑一次合成评分并更新 best；<=0 关闭")
+    ap.add_argument("--checkpoint-selection", choices=("best", "last"), default="best",
+                    help="best=按 monitor 选轮次；last=固定末轮，留出集只做最终报告")
+    ap.add_argument("--trainable-scope", choices=("all", "out"), default="all",
+                    help="all=全模型微调；out=只训练最终输出卷积，降低域外遗忘风险")
     ap.add_argument("--n_synth", type=int, default=400, help="合成模式:造多少训练窗口")
     ap.add_argument("--win", type=int, default=3001, help="训练窗口长度(PhaseNet默认3001)")
     ap.add_argument("--sr", type=float, default=None,
@@ -461,6 +489,18 @@ def main():
                     help="可选：本地权重(.pt)作为微调起点（如 USTC-Pickers 的省级 picker），"
                          "在 --pretrained 骨架上覆盖加载")
     args = ap.parse_args()
+
+    for label, path in (
+        ("training data", args.data),
+        ("holdout", args.holdout),
+        ("output", args.out),
+        ("initial weights", args.init_weights),
+    ):
+        if path and path != "synth":
+            try:
+                assert_experiment_path_allowed(path, label)
+            except ValueError as exc:
+                raise SystemExit(str(exc)) from exc
 
     import torch
     import seisbench.models as sbm
@@ -484,7 +524,10 @@ def main():
                     break
         model.load_state_dict(state)
     label_order = list(getattr(model, "labels", ["P","S","N"]))
+    trainable_names = configure_trainable_scope(model, args.trainable_scope)
     print("设备=%s | 模型输出通道顺序=%s" % (device, label_order))
+    print("可训练范围=%s | 参数张量=%d | %s" % (
+        args.trainable_scope, len(trainable_names), ",".join(trainable_names)))
 
     # ---- 采样率唯一真源 = 模型原生采样率（训练前向喂裸张量,不走 seisbench 重采样,错位即学错时间尺度）----
     sr_model = getattr(model, "sampling_rate", None)
@@ -516,13 +559,15 @@ def main():
     print_score("微调前(合成)", before)
     ensure_baseline_has_picks("合成", before)
     before_ho = None
-    if args.holdout:
+    if args.holdout and args.checkpoint_selection == "best":
         print("\n==== 微调【前】真实留出集评分 ====")
         before_ho = eval_holdout(model, args.holdout, args.sr, device, args.win, args.holdout_max)
         print_score("微调前(真实)", before_ho)
         if before_ho["n"] == 0:
             raise SystemExit("留出集抽样后没有标注窗（为空或全是噪声窗）——monitor 无法工作，检查 holdout 构成")
         ensure_baseline_has_picks("留出集", before_ho)
+    elif args.holdout:
+        print("\n[固定末轮] 训练前不打开真实留出集；它只在训练结束后做一次终检。")
 
     # ---- 训练数据 ----
     print("\n==== 构造训练数据 (%s) ====" % args.data)
@@ -577,7 +622,7 @@ def main():
     # 续训时不写：此刻模型已是 last 权重，而 before 分数是预训练权重的，写进去会张冠李戴，
     # 还可能把上一轮真 best.pt 覆盖掉。
     baseline_monitor = before_ho["mean_score"] if before_ho is not None else before["mean_score"]
-    if not resumed and baseline_monitor >= best_score:
+    if args.checkpoint_selection == "best" and not resumed and baseline_monitor >= best_score:
         best_score = baseline_monitor
         save_checkpoint(
             ckpt_best, model, opt, start_epoch, loss=None, best_score=best_score,
@@ -629,7 +674,12 @@ def main():
 
         score = None
         holdout_score = None
-        if args.score_every > 0 and ((ep + 1) % args.score_every == 0 or ep + 1 == args.epochs):
+        should_score = (
+            args.checkpoint_selection == "best"
+            and args.score_every > 0
+            and ((ep + 1) % args.score_every == 0 or ep + 1 == args.epochs)
+        )
+        if should_score:
             score = eval_score(model, args.sr, device)
             # 挑 best 的守门指标：有 --holdout 用真实留出集，否则退回合成分。
             # 合成分只作 sanity（看有没有崩），best 的真正依据是留出集泛化。
@@ -662,10 +712,12 @@ def main():
         ), flush=True)
 
     # ---- 微调后评分 + 对比 ----
-    if os.path.exists(ckpt_best):
-        state = load_checkpoint_state(ckpt_best, device)
+    selected_checkpoint = checkpoint_selection_path(
+        args.checkpoint_selection, ckpt_last, ckpt_best)
+    if os.path.exists(selected_checkpoint):
+        state = load_checkpoint_state(selected_checkpoint, device)
         model.load_state_dict(state["model"])
-        print("\n==== 微调【后】评分（使用 best checkpoint，best=%.4f）====" % float(state.get("best_score", best_score)))
+        print("\n==== 微调【后】评分（使用 %s checkpoint）====" % args.checkpoint_selection)
     else:
         print("\n==== 微调【后】评分 ====")
     after = eval_score(model, args.sr, device)
@@ -688,7 +740,7 @@ def main():
         print_score("微调后(真实)", after_ho)
         dh = after_ho["mean_score"] - before_ho["mean_score"]
         print("  真实平均分变化: %+.4f  %s" % (dh, "(提升↑)" if dh > 0 else "(未提升/退化)"))
-    print("\n权重已存: %s/best.pt  (小文件, 记得 push 回 GitHub 保住成果)" % args.out)
+    print("\n权重已存: %s  (selection=%s)" % (selected_checkpoint, args.checkpoint_selection))
     print("提示: 合成数据上预训练模型本就近满分, 关键看'微调后不崩';")
     print("      真正的提升要在真实【留出集】上才看得出来(用 --holdout 指定)。")
 

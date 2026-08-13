@@ -28,13 +28,59 @@ finetune_phasenet.py 吃的是"group data 下每条一个窗口 + attrs 标注�
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import sys
 import time
 
 import numpy as np
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
+from phasepicker.training.data_policy import assert_experiment_path_allowed  # noqa: E402
+
 _MARGIN = 250  # diting 首尾盲区（点），窗口裁剪时避开
+
+_EVENT_ID_COLUMNS = (
+    "source_event_id",
+    "source_id",
+    "event_id",
+    "source_origin_time",
+)
+
+
+def _stable_hash01(text: str) -> float:
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return int(digest[:16], 16) / float(0xFFFFFFFFFFFFFFFF)
+
+
+def _event_id(row) -> str | None:
+    for key in _EVENT_ID_COLUMNS:
+        value = row.get(key, None)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text and text.lower() not in {"nan", "none", "nat"}:
+            return text
+    return None
+
+
+def _split_bucket(row, has_split: bool, split_mode: str, dev_frac: float) -> str:
+    if split_mode == "official" and has_split:
+        split = str(row.get("split", "train")).lower()
+        return "dev" if split in ("dev", "test", "val") else "train"
+    event_id = _event_id(row)
+    if event_id is None:
+        raise ValueError(
+            "event-hash split requires one of: " + ", ".join(_EVENT_ID_COLUMNS)
+        )
+    return "dev" if _stable_hash01(event_id) < dev_frac else "train"
+
+
+def _sp_seconds(p_sample: int, s_sample: int, sampling_rate: float) -> float | None:
+    if p_sample < 0 or s_sample < 0 or sampling_rate <= 0:
+        return None
+    value = (s_sample - p_sample) / sampling_rate
+    return value if value > 0 else None
 
 
 def _resample(wave: np.ndarray, sr_in: float, sr_out: float) -> np.ndarray:
@@ -146,6 +192,8 @@ def _row_sr(row, default: float) -> float:
 
 
 def convert(args) -> int:
+    assert_experiment_path_allowed(args.cache, "cache")
+    assert_experiment_path_allowed(args.out_dir, "output")
     # 必须在 import seisbench 之前设好缓存根：seisbench 在 import 时就读这个值。
     # 顺序写反过一次，后果是无视本地已下好的分块、重新去 DESY 下一遍。
     os.environ["SEISBENCH_CACHE_ROOT"] = args.cache
@@ -169,11 +217,20 @@ def convert(args) -> int:
     print(f"[池] {len(ds)} 条; 列 {len(md.columns)}")
 
     rng = np.random.RandomState(args.seed)
-    # 官方 split 列可用则据此分流；否则全进 train，dev 由 --dev-frac 随机切
+    # 默认优先使用官方 split；研究场景可显式按事件稳定散列，避免同一地震的多台站
+    # 记录跨入 train/dev。没有事件 ID 时拒绝退化成按窗口随机切分。
     has_split = "split" in md.columns
-    if has_split:
+    if args.split_mode == "official" and has_split:
         print("[池] 使用数据集自带 split:",
               md["split"].value_counts().to_dict())
+    else:
+        missing_event_id = not any(c in md.columns for c in _EVENT_ID_COLUMNS)
+        if missing_event_id:
+            raise SystemExit(
+                "--split-mode event-hash 需要事件 ID 列；当前 metadata 不含 "
+                + ", ".join(_EVENT_ID_COLUMNS)
+            )
+        print(f"[池] 按事件稳定散列切分，dev_frac={args.dev_frac:.3f}")
 
     os.makedirs(args.out_dir, exist_ok=True)
     tag = args.tag or (args.chunks.replace(",", "_") if args.chunks
@@ -191,7 +248,13 @@ def convert(args) -> int:
     fh = {k: h5py.File(v, "w") for k, v in tmp.items()}
     grp = {k: f.create_group("data") for k, f in fh.items()}
     stat = {"train": 0, "dev": 0}
-    skipped = {"no_pick": 0, "crop_fail": 0, "read_fail": 0, "short": 0}
+    skipped = {
+        "no_pick": 0,
+        "sp_outside": 0,
+        "crop_fail": 0,
+        "read_fail": 0,
+        "short": 0,
+    }
     t0 = time.time()
     n = len(ds)
     for i in range(n):
@@ -203,6 +266,14 @@ def convert(args) -> int:
         if args.require_ps and (p_pre < 0 or s_pre < 0):
             skipped["no_pick"] += 1
             continue
+        sr_in = _row_sr(row, args.assume_sr)
+        sp_s = _sp_seconds(p_pre, s_pre, sr_in)
+        if args.sp_min_s is not None and (sp_s is None or sp_s < args.sp_min_s):
+            skipped["sp_outside"] += 1
+            continue
+        if args.sp_max_s is not None and (sp_s is None or sp_s > args.sp_max_s):
+            skipped["sp_outside"] += 1
+            continue
         try:
             wave = ds.get_waveforms(i)
         except Exception:  # noqa: BLE001 - 单条坏数据不该中断整块
@@ -212,7 +283,6 @@ def convert(args) -> int:
             skipped["read_fail"] += 1
             continue
         wave = np.nan_to_num(wave[:3].astype("float32"), copy=False)
-        sr_in = _row_sr(row, args.assume_sr)
         p = p_pre
         s = s_pre
         if not args.noise_only and p < 0 and s < 0:
@@ -233,11 +303,12 @@ def convert(args) -> int:
             continue
         w, pp, ss = got
 
-        if has_split:
-            sp = str(row.get("split", "train")).lower()
-            bucket = "dev" if sp in ("dev", "test", "val") else "train"
-        else:
-            bucket = "dev" if rng.rand() < args.dev_frac else "train"
+        bucket = _split_bucket(
+            row,
+            has_split=has_split,
+            split_mode=args.split_mode,
+            dev_frac=args.dev_frac,
+        )
         d = grp[bucket].create_dataset(
             f"{tag}_{i}", data=w, compression="gzip", compression_opts=1)
         # attr 名是历史名，语义 = 本池采样率下的窗内下标（见文件头第 3 条）
@@ -245,6 +316,11 @@ def convert(args) -> int:
         d.attrs["s_sample_100hz"] = ss
         d.attrs["sampling_rate"] = float(args.sr)
         d.attrs["src"] = f"{args.dataset}:{tag}:{i}"
+        event_id = _event_id(row)
+        if event_id is not None:
+            d.attrs["event_id"] = event_id
+        if sp_s is not None:
+            d.attrs["sp_seconds"] = float(sp_s)
         stat[bucket] += 1
         if args.limit and (stat["train"] + stat["dev"]) >= args.limit:
             break
@@ -288,12 +364,22 @@ def main() -> int:
     ap.add_argument("--noise-only", action="store_true",
                     help="纯噪声集：忽略到时列，全部标为 p=s=-1")
     ap.add_argument("--dev-frac", type=float, default=0.05,
-                    help="数据集无 split 列时的 dev 随机比例")
+                    help="event-hash 模式的事件级 dev 比例")
+    ap.add_argument("--split-mode", choices=("official", "event-hash"),
+                    default="official",
+                    help="official=用数据集 split；event-hash=按事件稳定散列防泄漏")
+    ap.add_argument("--sp-min-s", type=float, default=None,
+                    help="只保留 S-P 不小于该秒数的双相记录")
+    ap.add_argument("--sp-max-s", type=float, default=None,
+                    help="只保留 S-P 不大于该秒数的双相记录")
     ap.add_argument("--limit", type=int, default=0, help="最多写多少条(0=全部)")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--force", action="store_true", help="已存在也重建")
     args = ap.parse_args()
-    return convert(args)
+    try:
+        return convert(args)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 if __name__ == "__main__":
