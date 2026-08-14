@@ -1,0 +1,80 @@
+{
+  "protocol": "public STEAD only; real network/station groups; competition data untouched",
+  "n_records": 32602,
+  "n_networks_used": [
+    "AK",
+    "AV",
+    "C",
+    "OK",
+    "CI",
+    "HT",
+    "C1",
+    "HP",
+    "PB",
+    "HL"
+  ],
+  "n_stations_used": [
+    "AK.BPAW",
+    "OK.BCOK",
+    "AV.AU22",
+    "C.GO01",
+    "HP.AMT",
+    "HT.AGG",
+    "AK.BRLK",
+    "AK.ATKA",
+    "AV.AKGG",
+    "AV.AUI"
+  ],
+  "lono": {
+    "gbm_v2ref": {
+      "mae": 0.13992667768632344,
+      "r": 0.8980479771241592,
+      "worst_group_mae": 0.24727203054829838
+    },
+    "extra": {
+      "mae": 0.12871776973571342,
+      "r": 0.9126242754676547,
+      "worst_group_mae": 0.1981466570655617
+    },
+    "hgb": {
+      "mae": 0.13852830203541422,
+      "r": 0.8926711576589446,
+      "worst_group_mae": 0.25151718683295476
+    },
+    "ridge": {
+      "mae": 0.17214700031242777,
+      "r": 0.8613156595844417,
+      "worst_group_mae": 0.45118234193686285
+    }
+  },
+  "loso": {
+    "gbm_v2ref": {
+      "mae": 0.08373768764630594,
+      "r": 0.9468648320696282,
+      "worst_group_mae": 0.12162728817735795
+    },
+    "extra": {
+      "mae": 0.08496484140396991,
+      "r": 0.9425884533019293,
+      "worst_group_mae": 0.13135809442207674
+    },
+    "hgb": {
+      "mae": 0.08750268668365528,
+      "r": 0.941641142986073,
+      "worst_group_mae": 0.12592294489111305
+    },
+    "ridge": {
+      "mae": 0.10433487612406413,
+      "r": 0.9263048334170902,
+      "worst_group_mae": 0.18684481448075901
+    }
+  },
+  "decision": {
+    "baseline_lono_mae": 0.13992667768632344,
+    "best_candidate": "extra",
+    "best_lono_mae": 0.12871776973571342,
+    "candidate_loso_mae": 0.08496484140396991,
+    "baseline_loso_mae": 0.08373768764630594,
+    "accept": false
+  }
+}
