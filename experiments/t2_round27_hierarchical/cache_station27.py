@@ -20,5 +20,3 @@ for j,i0 in enumerate(idx):
 X=X[:k];Y=Y[:k];NET=NET[:k].astype(str);STA=STA[:k].astype(str);SRC=SRC[:k].astype(str);np.save(f'{OUT}/X.npy',X);np.save(f'{OUT}/y.npy',Y);np.save(f'{OUT}/net.npy',NET);np.save(f'{OUT}/sta.npy',STA);np.save(f'{OUT}/src.npy',SRC)
 json.dump(dict(n=int(k),skipped=int(sk),protocol='STEAD P-5s..P+5s',networks=int(len(set(NET))),stations=int(len(set(NET+'.'+STA)))),open(f'{OUT}/meta.json','w'),indent=2)
 print('DONE',X.shape,'networks',len(set(NET)),'stations',len(set(NET+'.'+STA)),flush=True)
-
-
