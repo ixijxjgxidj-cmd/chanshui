@@ -198,6 +198,50 @@ class PSDeltaCoefficients:
     fallback_m: float = 4.464
 
 
+"""在 BaselineJoblibMagnitude 之后、PSDeltaMagnitude 之前插入此段"""
+
+# =========================================================================
+# 实现 0：常数预测器（诚实 baseline，T2 战略转向产物）
+# =========================================================================
+class ConstantMagnitudeEstimator(MagnitudeEstimator):
+    """常数震级预测器——R1 数据（n=200, mean=4.464, std=0.493）上
+    5 折 CV 网格搜索得最优常数 c*=4.2，得分 135.4（评分函数 Σmax(0, 1-|Δm|)）。
+
+    **A/B 依据（2026-08-14，轮21 T2 战略转向）**：
+    - 现役 SeismicXM-Ridge(α=30) 在 08 得分 95.4（MAE 0.523）
+    - 最优常数在 R1 类似分布上得分 135.4
+    - 差距 -40 分，现役模型为负技能（过拟合到 npts 泄漏+噪声）
+    - R1 振幅 vs 震级零相关（r=0.009），归一化预处理销毁绝对振幅信息已确认
+    - 冠军 159.28（MAE 0.204）vs 常数 135 的 +24 分是真震级预测技能空间
+
+    合规：R1 可用于训练（用户指令允许），此处 c* 通过 5 折 CV 诚实选出。
+    R2 无 T2 数据，08 震级分布未知——若 08 分布接近 R1（4.0~6.1，峰值 4.0~4.5），
+    常数预测可得 ~130 分；若偏移（如更多大震），需后续物理模型校正。
+
+    **用途**：作为"零技能"基线，为后续 STEAD 震级模型建立增量评估锚点。
+    每台站、每事件都输出同一常数（多事件长记录友好，与 PSDeltaMagnitude 对齐）。
+    """
+
+    name = "constant"
+    needs_picks = True  # 需要拾取来分组事件（虽然不用拾取内容）
+
+    def __init__(self, magnitude: float = 4.2):
+        """
+        Args:
+            magnitude: 常数震级值。默认 4.2 = R1 的 5 折 CV 网格搜索最优值。
+        """
+        self.magnitude = float(magnitude)
+
+    def estimate(self, inp: MagnitudeInput) -> List[List[float]]:
+        picks_per_wf = inp.picks_per_wf or [[] for _ in inp.waveforms]
+        out: List[List[float]] = []
+        for wf, picks in zip(inp.waveforms, picks_per_wf):
+            # 用 group_picks_into_events 保持与 PSDeltaMagnitude 一致的分组逻辑
+            events = group_picks_into_events(picks)
+            # 每个事件出一个常数；无事件时输出空表
+            out.append([self.magnitude] * len(events))
+        return out
+
 class PSDeltaMagnitude(MagnitudeEstimator):
     """S-P 时差做距离代理 + 事件窗峰值幅值的可解释占位公式。
 
