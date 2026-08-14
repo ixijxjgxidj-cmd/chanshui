@@ -1,0 +1,41 @@
+{
+  "center": 4.800000000000001,
+  "slope": 0.0,
+  "members": [
+    "M1",
+    "M2",
+    "M3",
+    "M4",
+    "M5",
+    "M6",
+    "M7"
+  ],
+  "calib": {
+    "R1->R2": {
+      "slope_fit_on_src": 0.4,
+      "src_score": 136.83961595807756,
+      "dst_with_src_center": 31.410078321184432,
+      "dst_with_merged_center": 124.82661928449359,
+      "dst_const_src_center": 28.28568731035505,
+      "dst_const_merged_center": 124.85717296600343,
+      "dst_const_self": 144.4285828726632
+    },
+    "R2->R1": {
+      "slope_fit_on_src": 0.4,
+      "src_score": 145.01689638410295,
+      "dst_with_src_center": 46.75693103245327,
+      "dst_with_merged_center": 93.50038596561977,
+      "dst_const_src_center": 46.571442059108186,
+      "dst_const_merged_center": 93.57139723641532,
+      "dst_const_self": 133.7142678669521
+    }
+  },
+  "note": "pred = center + slope*(z - median(z)); z=7\u6210\u5458\u53bb\u4e2d\u5fc3\u5e73\u5747",
+  "split_r1": "0c8b3d6cacde72b1e4f45d549ca6f0ae77be4fcabedb8477c5abe0b7fae78cf7",
+  "split_r2": "eef031f02fc32a4959afbea62de96a006188ecc5207a30282492c55edc62ef14",
+  "train_medians": {
+    "R1": 4.300000190734863,
+    "R2": 5.199999809265137,
+    "merged": 4.800000190734863
+  }
+}
