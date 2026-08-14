@@ -86,7 +86,7 @@ MK={'gbm_v2ref':lambda:GradientBoostingRegressor(random_state=0,n_estimators=500
 def logo(F,T,G):
  out={}
  for name,mk in MK.items():
-  pred=np.zeros(len(T)); 
+  pred=np.zeros(len(T));
   for g in sorted(set(G.tolist())):
    a=G!=g; b=G==g
    mu=F[a].mean(0); sd=F[a].std(0)+1e-6; mdl=mk(); mdl.fit((F[a]-mu)/sd,T[a]); pred[b]=mdl.predict((F[b]-mu)/sd)
@@ -110,4 +110,3 @@ if accept:
  mu=Fn.mean(0); sd=Fn.std(0)+1e-6; mdl=MK[best](); mdl.fit((Fn-mu)/sd,Tn)
  pickle.dump(dict(model=mdl,mu=mu,sd=sd,best=best,feature_layout='mean/z/std/snr percentiles + spec percentiles + size'),open(f'{OUT}/center_station.pkl','wb'))
  print('frozen candidate saved',best,flush=True)
-
