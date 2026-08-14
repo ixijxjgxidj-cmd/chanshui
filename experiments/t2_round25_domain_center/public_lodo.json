@@ -1,0 +1,31 @@
+{
+  "protocol": "public STEAD only; source_id hash pseudo-domains; domain3 held out",
+  "n_records": 32602,
+  "n_batches": 3200,
+  "report": {
+    "gbm": {
+      "test_domain": 3,
+      "mae": 0.08006469307386671,
+      "r": 0.9811423919789553,
+      "train_mae": 0.0337934537593245,
+      "lodo_mae": 0.06929576657909177,
+      "lodo_r": 0.9790028523436487
+    },
+    "extra": {
+      "test_domain": 3,
+      "mae": 0.07538094780590698,
+      "r": 0.9829044577498061,
+      "train_mae": 0.017646820736004442,
+      "lodo_mae": 0.0658365705477672,
+      "lodo_r": 0.9816239513777585
+    },
+    "huber": {
+      "test_domain": 3,
+      "mae": 0.0794841871753944,
+      "r": 0.9791951583831846,
+      "train_mae": 0.05924086591599436,
+      "lodo_mae": 0.07186132380624825,
+      "lodo_r": 0.9794611738534055
+    }
+  }
+}

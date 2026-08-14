@@ -1,0 +1,23 @@
+{
+  "protocol": "frozen public LODO ExtraTrees; R1/R2 pre-registered train only; holdouts and 08 not read",
+  "R1": {
+    "n": 140,
+    "holdout_count": 60,
+    "truth_center": 4.300000190734863,
+    "estimated_center": 4.374154731035232,
+    "center_error": 0.07415454030036894,
+    "const_score": 130.642157963344,
+    "rank_r": 0.42213213443756104,
+    "linear040_score": 135.52142483847481
+  },
+  "R2": {
+    "n": 140,
+    "holdout_count": 60,
+    "truth_center": 5.199999809265137,
+    "estimated_center": 4.982843037764229,
+    "center_error": -0.21715677150090773,
+    "const_score": 141.31301879882812,
+    "rank_r": 0.30782946944236755,
+    "linear040_score": 142.36702374049594
+  }
+}
