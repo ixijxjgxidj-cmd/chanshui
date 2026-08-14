@@ -148,9 +148,16 @@ def main() -> int:
     ap.add_argument("--dev-frac", type=float, default=0.08)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--http-range", action="store_true",
+                    help="用 HTTP Range 直读远端 HDF5，不整块下载（适合 >10GB 的源）")
     ap.add_argument("--keep-raw", action="store_true",
                     help="处理完不删除下载的 waveforms 分块（默认删，省磁盘）")
     args = ap.parse_args()
+
+    if args.http_range:
+        # 顶部导入：下面的条件表达式两个分支都会被求值前解析到这个名字
+        global HttpRangeFile
+        from sb_http import HttpRangeFile
 
     ds = args.dataset.lower()
     cache = args.cache_dir or os.path.join(args.out_dir, "raw")
@@ -190,14 +197,32 @@ def main() -> int:
         if len(sel) == 0:
             continue
 
-        local = os.path.join(cache, f"{ds}_waveforms{suffix}.hdf5")
-        print(f"[chunk {c}] download {wf_url}", flush=True)
-        download(wf_url, local)
-        print(f"[chunk {c}] downloaded {os.path.getsize(local)/2**20:.0f} MB", flush=True)
+        # 两种取波形的方式：
+        #  - 整块下载：适合 <10 GB 的源（顺序 IO，镜像带宽跑满最快）
+        #  - HTTP Range 直读：适合 PNW(67GB)/txed(75GB) 这类巨型源，只取命中的
+        #    bucket 片段。代价是随机小读多、吞吐低，但总传输量可能只有 1%。
+        if args.http_range:
+            local = None
+            print(f"[chunk {c}] HTTP-Range 直读 {wf_url}", flush=True)
+        else:
+            local = os.path.join(cache, f"{ds}_waveforms{suffix}.hdf5")
+            print(f"[chunk {c}] download {wf_url}", flush=True)
+            download(wf_url, local)
+            print(f"[chunk {c}] downloaded {os.path.getsize(local)/2**20:.0f} MB",
+                  flush=True)
 
-        ev_col = next((x for x in ("source_id", "source_event_id", "event_id",
-                                   "source_origin_time") if x in md.columns), None)
-        with h5py.File(local, "r") as f:
+        # 事件列必须真的有值：obst2024 的 source_id 列存在但全为 NaN，若照选
+        # 会让所有窗归到同一"事件"，事件隔离与分层抽样双双失效（本轮实测踩到）。
+        ev_col = None
+        for x in ("source_id", "source_event_id", "event_id", "source_origin_time"):
+            if x in md.columns and md[x].notna().any():
+                ev_col = x
+                break
+        if ev_col is None:
+            print("[warn] 无可用事件列，退化为逐行独立（事件隔离失效）", flush=True)
+        _fh_src = (h5py.File(HttpRangeFile(wf_url), "r", driver="fileobj")
+                   if args.http_range else h5py.File(local, "r"))
+        with _fh_src as f:
             data = f["data"]
             # 按 bucket 分组，避免反复打开同一大数组
             by_bucket: dict[str, list] = {}
@@ -260,7 +285,7 @@ def main() -> int:
                     sp_hist.append(float((ss - pp) / POOL_SR))
                 print(f"    bucket {base}: cum train={stat['train']} dev={stat['dev']}",
                       flush=True)
-        if not args.keep_raw:
+        if local and not args.keep_raw:
             os.remove(local)
             print(f"[chunk {c}] removed raw to save disk", flush=True)
 
