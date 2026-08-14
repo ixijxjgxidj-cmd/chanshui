@@ -1,0 +1,27 @@
+{
+  "split_sha256": "0c8b3d6cacde72b1e4f45d549ca6f0ae77be4fcabedb8477c5abe0b7fae78cf7",
+  "n_train": 140,
+  "cv": {
+    "constant(median)": {
+      "mae": 0.35928571428571426,
+      "score200": 133.71428571428572
+    },
+    "Ridge(6 phys)": {
+      "mae": 0.4004446414369778,
+      "score200": 124.50417929460458
+    },
+    "GBM(6 phys)": {
+      "mae": 0.38493588066231377,
+      "score200": 129.8450039822639
+    }
+  },
+  "constant_minus_best_physical": 3.8692817320218182,
+  "feature_names": [
+    "logAmax_Z",
+    "logAmax_H",
+    "logRMS_Z",
+    "logRMS_H",
+    "fc_Z",
+    "fc_H"
+  ]
+}
