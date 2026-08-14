@@ -1,0 +1,22 @@
+{
+  "n": 60466,
+  "protocol": "STEAD P-5s..P+5s",
+  "networks": 103,
+  "stations": 1754,
+  "verified_shapes": {
+    "X": [
+      60466,
+      3,
+      1000
+    ],
+    "y": [
+      60466
+    ],
+    "net": [
+      60466
+    ],
+    "sta": [
+      60466
+    ]
+  }
+}
