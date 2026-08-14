@@ -43,4 +43,3 @@ def evalnet(net):
 base=train(False);rb=evalnet(base);rank=train(True);rr=evalnet(rank);print('RESULT',rb,rr,flush=True)
 json.dump(dict(protocol='public STEAD true station lineage; rank loss only public; no competition data',stations=stations,train_n=int(len(TR)),val_n=int(len(VA)),baseline=rb,rank_augmented=rr),open(f'{OUT}/rank_public.json','w'),indent=2)
 torch.save(rank.state_dict(),f'{OUT}/rank_aug.pt')
-
