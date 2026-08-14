@@ -53,5 +53,3 @@ def run(key,d,ans,strip=False):
  return dict(n=len(y),holdout_count=len(ho),truth_center=float(np.median(y)),estimated_center=c,center_error=c-float(np.median(y)),const_score=score200(np.full_like(y,c),y),rank_r=float(pearsonr(z,y)[0]),linear040_score=score200(pr,y))
 r={'protocol':'frozen public LODO ExtraTrees; R1/R2 pre-registered train only; holdouts and 08 not read','R1':run('R1','r1_t2','r1_t2/answers.txt'),'R2':run('R2','r2_t2','r2_t2/T2.an',True)}
 json.dump(r,open(f'{OUT}/external_trainonly.json','w'),indent=2);print(json.dumps(r,indent=2))
-
-

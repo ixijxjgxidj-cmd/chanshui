@@ -76,5 +76,3 @@ json.dump(dict(protocol='public STEAD only; source_id hash pseudo-domains; domai
 # freeze best by LODO MAE, tie r
 best=min(rep,key=lambda k:(rep[k]['lodo_mae'],-rep[k]['lodo_r'])); m=mods[best]; m.fit((F-mu)/sd,T); pickle.dump(dict(model=m,mu=mu,sd=sd,best=best),open(f'{OUT}/center_lodo.pkl','wb'))
 print('BEST',best,rep[best],flush=True)
-
-
