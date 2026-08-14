@@ -1,0 +1,89 @@
+{
+  "protocol": "public STEAD true station lineage; LOSO risk selector; no competition data",
+  "n_records": 28154,
+  "stations": [
+    "C.GO01",
+    "AK.ATKA",
+    "C.GO02",
+    "AK.RC01",
+    "C.GO04",
+    "IU.SNZO",
+    "NZ.URZ",
+    "AV.TAFP"
+  ],
+  "n_batches": 1129,
+  "per_station": {
+    "C.GO01": {
+      "n": 202,
+      "base_mae": 0.06385231813560537,
+      "const_mae": 0.06728555116519504,
+      "selective_mae": 0.06715953025601518,
+      "coverage": 0.23267326732673269,
+      "highrisk": 155,
+      "risk_r": 0.1331997392415747
+    },
+    "AK.ATKA": {
+      "n": 170,
+      "base_mae": 0.09030807188513366,
+      "const_mae": 0.0888639236409033,
+      "selective_mae": 0.08891918758238769,
+      "coverage": 0.17647058823529413,
+      "highrisk": 140,
+      "risk_r": 0.39163255100686895
+    },
+    "C.GO02": {
+      "n": 139,
+      "base_mae": 0.04523286434244795,
+      "const_mae": 0.04568009545706997,
+      "selective_mae": 0.04568221115177652,
+      "coverage": 0.5035971223021583,
+      "highrisk": 69,
+      "risk_r": -0.24562721932473844
+    },
+    "AK.RC01": {
+      "n": 104,
+      "base_mae": 0.07398584787885616,
+      "const_mae": 0.07485416603734112,
+      "selective_mae": 0.07486786921288337,
+      "coverage": 0.11538461538461539,
+      "highrisk": 92,
+      "risk_r": 0.0033585694782715387
+    },
+    "C.GO04": {
+      "n": 155,
+      "base_mae": 0.058536373328068506,
+      "const_mae": 0.05630187141154995,
+      "selective_mae": 0.056938325284111496,
+      "coverage": 0.44516129032258067,
+      "highrisk": 86,
+      "risk_r": 0.3398517703807394
+    },
+    "IU.SNZO": {
+      "n": 114,
+      "base_mae": 0.06987598230998164,
+      "const_mae": 0.06860211743508765,
+      "selective_mae": 0.0688755243663031,
+      "coverage": 0.41228070175438597,
+      "highrisk": 67,
+      "risk_r": 0.03364296468849369
+    },
+    "NZ.URZ": {
+      "n": 136,
+      "base_mae": 0.07574903351856814,
+      "const_mae": 0.077768282974451,
+      "selective_mae": 0.07788160212830461,
+      "coverage": 0.3897058823529412,
+      "highrisk": 83,
+      "risk_r": 0.319437849372309
+    },
+    "AV.TAFP": {
+      "n": 109,
+      "base_mae": 0.13618220558371966,
+      "const_mae": 0.13730776025771715,
+      "selective_mae": 0.13683995257775883,
+      "coverage": 0.6238532110091743,
+      "highrisk": 41,
+      "risk_r": 0.4576568773931651
+    }
+  }
+}
