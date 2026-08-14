@@ -1,0 +1,25 @@
+{
+  "protocol": "public STEAD true station lineage; rank loss only public; no competition data",
+  "stations": [
+    "C.GO01",
+    "AK.ATKA",
+    "C.GO02",
+    "AK.RC01",
+    "C.GO04",
+    "IU.SNZO",
+    "NZ.URZ",
+    "AV.TAFP"
+  ],
+  "train_n": 1322,
+  "val_n": 1311,
+  "baseline": {
+    "r": 0.5352228879928589,
+    "rho": 0.47578715319674164,
+    "mae": 0.2697397470474243
+  },
+  "rank_augmented": {
+    "r": 0.49973127245903015,
+    "rho": 0.4263597979615636,
+    "mae": 0.31225430965423584
+  }
+}
