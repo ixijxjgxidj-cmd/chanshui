@@ -1,0 +1,30 @@
+{
+  "protocol": "public STEAD+INSTANCE pretraining then fixed R1/R2 event-level fine-tune",
+  "public_stead_n": 23739,
+  "public_instance_train_n": 18718,
+  "r1_train_n": 140,
+  "r2_train_n": 140,
+  "r1_holdout_n": 60,
+  "r2_holdout_n": 60,
+  "members": 7,
+  "results": {
+    "scratch": {
+      "R1_raw": 135.8354687690735,
+      "R2_raw": 148.57900142669678,
+      "R1_cal": 135.38901805877686,
+      "R2_cal": 147.95619249343872,
+      "mean_cal": 141.6726052761078,
+      "R1_rho": 0.4427166592001344,
+      "R2_rho": 0.42069771028495284
+    },
+    "pretrained": {
+      "R1_raw": 135.3962540626526,
+      "R2_raw": 147.9099154472351,
+      "R1_cal": 135.17478704452515,
+      "R2_cal": 147.6216197013855,
+      "mean_cal": 141.39820337295532,
+      "R1_rho": 0.4341887114334716,
+      "R2_rho": 0.35000525351351075
+    }
+  }
+}
