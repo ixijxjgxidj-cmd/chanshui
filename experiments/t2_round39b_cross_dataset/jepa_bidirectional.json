@@ -1,0 +1,218 @@
+{
+  "protocol": "\u53cc\u5411\u8de8\u6570\u636e\u96c6JEPA\u9a8c\u8bc1\uff0c\u4e8b\u4ef6\u9694\u79bb\uff0clambda\u7531\u6807\u5b9a\u57df\u9009\uff0c\u8bc4\u4f30\u57df\u4e00\u6b21",
+  "torch": "2.9.0",
+  "device": "cuda",
+  "pre_epochs": 10,
+  "arms": [
+    "S-S",
+    "S-J",
+    "I-S",
+    "I-J"
+  ],
+  "stead": {
+    "name": "stead",
+    "source": "\u516c\u5f00 STEAD",
+    "protocol": "P-5s..P+5s, 100 Hz, 3C",
+    "n": 60466,
+    "sha256": "d3056121b14a186b9fbbcef5b09627a718427f5958c77a2d3391ac5bde34cf45"
+  },
+  "instance": {
+    "name": "instance",
+    "source": "\u516c\u5f00 INSTANCE\uff08\u5b98\u65b9 train/dev\uff09",
+    "protocol": "P-5s..P+5s, 100 Hz, 3C",
+    "n": 21209,
+    "sha256": "fff43e52dc9bdd7179264855c4120cd54463206fcd913d26025910c43e4b27fa"
+  },
+  "per_run": {
+    "S-S": [
+      {
+        "rho_in": 0.4264078140258789,
+        "rho_eval": 0.00811056699603796,
+        "lam_calib": 0.0,
+        "score_040": 187.86585013071695,
+        "score_lam_calib": 200.0,
+        "direction": "A",
+        "arm": "S-S",
+        "secs": 40.690430641174316
+      }
+    ],
+    "S-J": [
+      {
+        "rho_in": 0.4182594418525696,
+        "rho_eval": 0.08053310215473175,
+        "lam_calib": 0.0,
+        "score_040": 190.02926190694174,
+        "score_lam_calib": 200.0,
+        "direction": "A",
+        "arm": "S-J",
+        "secs": 246.2070450782776
+      }
+    ],
+    "I-S": [
+      {
+        "rho_in": 0.5513291358947754,
+        "rho_eval": 0.36521804332733154,
+        "lam_calib": 0.0,
+        "score_040": 195.3500299360238,
+        "score_lam_calib": 200.0,
+        "direction": "B",
+        "arm": "I-S",
+        "eval_region": "ALASKA",
+        "secs": 20.936643600463867
+      },
+      {
+        "rho_in": 0.5513291358947754,
+        "rho_eval": -0.033488623797893524,
+        "lam_calib": 0.0,
+        "score_040": 192.42184596337304,
+        "score_lam_calib": 200.0,
+        "direction": "B",
+        "arm": "I-S",
+        "eval_region": "CALIF",
+        "secs": 21.40698504447937
+      },
+      {
+        "rho_in": 0.5513291358947754,
+        "rho_eval": 0.3311513066291809,
+        "lam_calib": 0.0,
+        "score_040": 195.4267120361328,
+        "score_lam_calib": 200.0,
+        "direction": "B",
+        "arm": "I-S",
+        "eval_region": "GREECE",
+        "secs": 21.832552194595337
+      },
+      {
+        "rho_in": 0.5513291358947754,
+        "rho_eval": 0.15615540742874146,
+        "lam_calib": 0.0,
+        "score_040": 188.44259316002945,
+        "score_lam_calib": 200.0,
+        "direction": "B",
+        "arm": "I-S",
+        "eval_region": "CHILE",
+        "secs": 22.313621520996094
+      },
+      {
+        "rho_in": 0.5513291358947754,
+        "rho_eval": 0.3205757439136505,
+        "lam_calib": 0.0,
+        "score_040": 195.7641567298752,
+        "score_lam_calib": 200.0,
+        "direction": "B",
+        "arm": "I-S",
+        "eval_region": "NZ",
+        "secs": 22.513834476470947
+      }
+    ],
+    "I-J": [
+      {
+        "rho_in": 0.5496343374252319,
+        "rho_eval": 0.35998380184173584,
+        "lam_calib": 0.0,
+        "score_040": 194.97912028256584,
+        "score_lam_calib": 200.0,
+        "direction": "B",
+        "arm": "I-J",
+        "eval_region": "ALASKA",
+        "secs": 171.0553948879242
+      },
+      {
+        "rho_in": 0.5496343374252319,
+        "rho_eval": 0.06597593426704407,
+        "lam_calib": 0.0,
+        "score_040": 193.64607279537287,
+        "score_lam_calib": 200.0,
+        "direction": "B",
+        "arm": "I-J",
+        "eval_region": "CALIF",
+        "secs": 171.5142204761505
+      },
+      {
+        "rho_in": 0.5496343374252319,
+        "rho_eval": 0.3432393968105316,
+        "lam_calib": 0.0,
+        "score_040": 195.28224952238844,
+        "score_lam_calib": 200.0,
+        "direction": "B",
+        "arm": "I-J",
+        "eval_region": "GREECE",
+        "secs": 171.93866753578186
+      },
+      {
+        "rho_in": 0.5496343374252319,
+        "rho_eval": 0.18114885687828064,
+        "lam_calib": 0.0,
+        "score_040": 191.1876039875691,
+        "score_lam_calib": 200.0,
+        "direction": "B",
+        "arm": "I-J",
+        "eval_region": "CHILE",
+        "secs": 172.41767263412476
+      },
+      {
+        "rho_in": 0.5496343374252319,
+        "rho_eval": 0.35025736689567566,
+        "lam_calib": 0.0,
+        "score_040": 195.2189139977187,
+        "score_lam_calib": 200.0,
+        "direction": "B",
+        "arm": "I-J",
+        "eval_region": "NZ",
+        "secs": 172.6012556552887
+      }
+    ]
+  },
+  "pretrain_loss": {
+    "S-J": [
+      0.10390297494732234,
+      0.013791254457992966,
+      0.008895155948391001,
+      0.005977049449316655,
+      0.0044763276098933255,
+      0.0036469869475397967,
+      0.0031806441838264274,
+      0.0029351096202272883,
+      0.002817546026229153,
+      0.0027789745130128714
+    ],
+    "I-J": [
+      0.149761101820368,
+      0.026418423790411063,
+      0.01392025618743348,
+      0.010565123912161235,
+      0.008474817731456441,
+      0.007235246044601471,
+      0.006519784645126065,
+      0.00610076630363349,
+      0.005917372396921635,
+      0.005849794963931165
+    ]
+  },
+  "aggregate": {
+    "S-S": {
+      "mean_rho_eval": 0.00811056699603796,
+      "mean_score_calib": 200.0,
+      "worst_score_calib": 200.0
+    },
+    "S-J": {
+      "mean_rho_eval": 0.08053310215473175,
+      "mean_score_calib": 200.0,
+      "worst_score_calib": 200.0
+    },
+    "I-S": {
+      "mean_rho_eval": 0.22792237550020217,
+      "mean_score_calib": 200.0,
+      "worst_score_calib": 200.0
+    },
+    "I-J": {
+      "mean_rho_eval": 0.2601210713386536,
+      "mean_score_calib": 200.0,
+      "worst_score_calib": 200.0
+    }
+  },
+  "decision": {
+    "A_jepa_beats_scratch": false,
+    "B_jepa_beats_scratch": false
+  }
+}
