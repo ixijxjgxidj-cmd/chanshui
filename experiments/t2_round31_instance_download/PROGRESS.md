@@ -32,3 +32,8 @@
 - 压缩波形：7,139,106,816 bytes（约 4.41%），下载 PID 1112310。
 - 已启动远程完成触发器 PID 1113126：仅在严格达到 Content-Length 后执行 zip2 -dc，输出 Instance_events_gm.hdf5。
 - 已核验 INSTANCE 元数据字段 115 列，后处理将按 source_type、ML/Mw、P±5 秒、事件级 split 与台站血缘过滤。
+
+## 2026-08-15 08:33 状态
+- 压缩波形：35,459,112,960 bytes（约 21.91%），主下载 PID 1112310 正常；自动解压守护仍等待严格完整文件。
+- 远程可用空间约 893 GB，足够保留压缩包并解压至约 167 GB HDF5。
+- 第37轮已审计已有 ETHZ/CREW/GEOFON/Iquique/OBST 池：仅含 T1 P/S 标签、无震级标签，不可错误用于 T2 跨域标定；INSTANCE 仍为 T2 的唯一正确公开跨域路径。
