@@ -31,7 +31,10 @@ def get(url):
             with open(CACHE, 'w', encoding='utf-8') as f: json.dump(_cache, f)
             return text
         except urllib.error.HTTPError as exc:
-            if exc.code != 429 or attempt == 2: raise
+            if exc.code != 429: raise
+            if attempt == 2:
+                print('[skip-rate-limited]', url[:80], flush=True)
+                return ''
             time.sleep(pause)
 
 def norm_words(text):
