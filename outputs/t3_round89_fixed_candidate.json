@@ -1,0 +1,8 @@
+{
+  "protocol": "fixed before R2: R1-only 5-fold CV then one R1-to-R2 check",
+  "r1_cv_accuracy": 0.89,
+  "r1_cv_n": 200,
+  "r1_to_r2_accuracy": 0.9947089947089947,
+  "r1_to_r2_correct": 188,
+  "r2_n": 189
+}

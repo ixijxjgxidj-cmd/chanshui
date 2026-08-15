@@ -1,0 +1,123 @@
+{
+  "experiment": "t3-domain-normalization-20260816",
+  "features": "/root/projects/t3_head_audit_20260816/features_tta.npz",
+  "shapes": {
+    "r1": [
+      200,
+      1024
+    ],
+    "r2": [
+      189,
+      1024
+    ]
+  },
+  "within_r1_cv": {
+    "cosine_knn5": {
+      "accuracy": 0.93,
+      "balanced_accuracy": 0.898,
+      "n": 200
+    },
+    "standard_cosine_knn5": {
+      "accuracy": 0.89,
+      "balanced_accuracy": 0.8423636363636364,
+      "n": 200
+    },
+    "robust_cosine_knn5": {
+      "accuracy": 0.89,
+      "balanced_accuracy": 0.8467272727272727,
+      "n": 200
+    },
+    "standard_logreg": {
+      "accuracy": 0.925,
+      "balanced_accuracy": 0.8901818181818182,
+      "n": 200
+    }
+  },
+  "within_r2_cv": {
+    "cosine_knn5": {
+      "accuracy": 0.9788359788359788,
+      "balanced_accuracy": 0.9310344827586207,
+      "n": 189
+    },
+    "standard_cosine_knn5": {
+      "accuracy": 1.0,
+      "balanced_accuracy": 1.0,
+      "n": 189
+    },
+    "robust_cosine_knn5": {
+      "accuracy": 0.9841269841269841,
+      "balanced_accuracy": 0.990625,
+      "n": 189
+    },
+    "standard_logreg": {
+      "accuracy": 0.9947089947089947,
+      "balanced_accuracy": 0.9827586206896552,
+      "n": 189
+    }
+  },
+  "joint_cv": {
+    "cosine_knn5": {
+      "accuracy": 0.9537275064267352,
+      "balanced_accuracy": 0.8672151898734176,
+      "n": 389
+    },
+    "standard_cosine_knn5": {
+      "accuracy": 0.9485861182519281,
+      "balanced_accuracy": 0.8732020628223159,
+      "n": 389
+    },
+    "robust_cosine_knn5": {
+      "accuracy": 0.9408740359897172,
+      "balanced_accuracy": 0.8709798406000937,
+      "n": 389
+    },
+    "standard_logreg": {
+      "accuracy": 0.9588688946015425,
+      "balanced_accuracy": 0.8990060947022972,
+      "n": 389
+    }
+  },
+  "cross_round": {
+    "r1_to_r2_cosine_knn5": {
+      "accuracy": 0.9894179894179894,
+      "balanced_accuracy": 0.9655172413793103,
+      "n": 189
+    },
+    "r1_to_r2_standard_cosine_knn5": {
+      "accuracy": 0.9947089947089947,
+      "balanced_accuracy": 0.996875,
+      "n": 189
+    },
+    "r1_to_r2_robust_cosine_knn5": {
+      "accuracy": 0.9947089947089947,
+      "balanced_accuracy": 0.996875,
+      "n": 189
+    },
+    "r1_to_r2_standard_logreg": {
+      "accuracy": 0.9894179894179894,
+      "balanced_accuracy": 0.99375,
+      "n": 189
+    },
+    "r2_to_r1_cosine_knn5": {
+      "accuracy": 0.7,
+      "balanced_accuracy": 0.32,
+      "n": 200
+    },
+    "r2_to_r1_standard_cosine_knn5": {
+      "accuracy": 0.71,
+      "balanced_accuracy": 0.3410909090909091,
+      "n": 200
+    },
+    "r2_to_r1_robust_cosine_knn5": {
+      "accuracy": 0.71,
+      "balanced_accuracy": 0.3432727272727273,
+      "n": 200
+    },
+    "r2_to_r1_standard_logreg": {
+      "accuracy": 0.71,
+      "balanced_accuracy": 0.33236363636363636,
+      "n": 200
+    }
+  },
+  "runtime_s": 8.416178703308105
+}
