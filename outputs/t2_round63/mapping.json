@@ -1,0 +1,20 @@
+{
+  "R1": {
+    "slope": 0.7979687783703021,
+    "intercept": 0.7123039131520083,
+    "n_batches": 200,
+    "batch_size": 60
+  },
+  "R2": {
+    "slope": 0.5309787350137525,
+    "intercept": 2.5648352258703198,
+    "n_batches": 200,
+    "batch_size": 60
+  },
+  "pooled": {
+    "slope": 0.558283641159026,
+    "intercept": 2.229846194086054,
+    "n_batches": 200,
+    "batch_size": 60
+  }
+}
