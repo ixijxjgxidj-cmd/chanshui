@@ -28,6 +28,8 @@
 | T1 现有候选三包四口径稳健重排（`base/cond/fp/g6/g6gate/g7/ov90/prod2`） | 三包 × 四口径共 12 单元；全部候选覆盖完整，但无候选 12 单元全不下降。最佳 `ov90` worst `-6.1500`、mean `-3.0972`、仅 2/12 正向；第 1 轮四口径全降，08 四口径全降 | 拒绝所有候选替换；保持生产 `g7`，不改推理、不部署 | `memory/experiments/010-t1-candidate-robustness-audit.md`；结果 SHA-256 `98353140...0f988`；提交 `79028e0` |
 | T1 同架构 PhaseNet 三折 LOPO 蒸馏（`KD-only` / `0.7 KD + 0.3 hard`） | 正式缓存、六次训练和六次推理均成功。`KD-only` 12 单元 worst/mean `-10.4111/-2.9944`；`KD+hard` 虽 8/12 正向、mean `+6.3491`，但 R1 四口径全降，worst `-6.2722`。`KD+hard` 在 R2、08 和 7/7 长记录上涨，仍不满足全单元不退化 | 两个基础学生均拒绝，不部署；不得在相同包上继续扫 alpha/温度/epoch/阈值/成员权重 | `memory/experiments/012-t1-phasenet-lopo-distillation.md`；审计 SHA-256 `ff98f656...8b77d`；提交 `f508480` |
 | T1 `package-record-balanced KD+hard` 三折 LOPO | 权重守恒、held-out 屏障和三折训练均通过；R1 默认回退从 `-6.2722` 缩至 `-2.3222`，但 R2/08 反转为 `-5.1944/-8.6889`。12 单元 worst/mean `-8.6889/-3.3602`、仅 2/12 正向；长记录 1/7 上升、合计 `-14.7222` | 拒绝，不部署；同三包不得继续扫包权/记录权/截断/下限/长度分段 | `memory/experiments/013-t1-package-record-balanced-distillation.md`；审计 SHA-256 `8ffe1f5c...5f009`；提交 `4edc4c5` |
+| T2 JEPA 遮蔽率与块长度消融（第 39C 六配置） | 第 39D 方差分解显示代表配置 `p8_m32_b10` 与 `p8_m48_b25` 的平均差为 `-0.0057`，gap/noise=`0.013`，不可区分；事件划分方差 `0.627` 远大于模型种子方差 `0.161`，更远大于配置差异 | 拒绝六配置排序；冻结 `p8_m32_b10`；不在相同公开 STEAD 数据上继续扫描遮蔽率、块大小、patch 尺寸或上下文保留比 | `memory/experiments/017-t2-round39d-jepa-variance.md`；结果 SHA-256 `786f63ba...500e8` |
+
 
 ## 可重新开启的条件
 
