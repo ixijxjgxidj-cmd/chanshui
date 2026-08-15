@@ -48,3 +48,15 @@ Round 58 预注册配置：多任务预训练（震级、距离、深度）+ R1/
 - [x] GitHub 已持久化配置、哈希、实验记录和文献库。
 - [x] 08 数据隔离规则保持有效。
 - [x] T1/T2 分数口径已明确分离。
+
+## T1 API 端到端冒烟（2026-08-16）
+
+使用固定发布参数启动 `scripts/serve_api.py`（本地端口 8001），并以仓库已有
+`outputs/captured_223/20260802/` MiniSEED 样本做黑盒请求。Windows Python 需要先设置
+`PYTHONUTF8=1`，否则 SeisBench 的 UTF-8 元数据会被系统默认 GBK 编码误读。
+
+- `GET /health`：HTTP 200，返回 `{"status":"ok"}`。
+- `POST /pick`：抽测 3 个 MiniSEED，3/3 返回 HTTP 200。
+- 响应结构、P/S 数组、UTC 微秒六位 `Z` 时间格式、每类到时升序：全部通过
+  `scripts/check_api.py`。
+- 本次只使用仓库已有样本，没有读取 08 数据或 R1/R2 holdout，也没有训练/下载。
