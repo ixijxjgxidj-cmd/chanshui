@@ -1,0 +1,23 @@
+{
+  "protocol": "public STEAD+INSTANCE train, INSTANCE dev blind-after-fit",
+  "stead_train": 22201,
+  "instance_train": 18718,
+  "instance_dev": 2491,
+  "results": {
+    "stead": {
+      "score": 150.63892602920532,
+      "rho": 0.002766572688009851,
+      "n_dev": 2491
+    },
+    "instance": {
+      "score": 153.75268459320068,
+      "rho": 0.16208148818351834,
+      "n_dev": 2491
+    },
+    "joint": {
+      "score": 154.72368001937866,
+      "rho": -0.04014916545368175,
+      "n_dev": 2491
+    }
+  }
+}
