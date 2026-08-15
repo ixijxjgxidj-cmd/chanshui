@@ -43,15 +43,43 @@ QUERIES = {
         'ground motion intensity prediction deep learning'],
 }
 
-def get(u, tries=3, delay=2.5):
+CACHE = f'{OUT}/http_cache.json'
+_cache = json.load(open(CACHE)) if os.path.exists(CACHE) else {}
+_last = [0.0]
+MIN_INTERVAL = 2.0     # 全局限速，避免 OpenAlex/Crossref 429
+BACKOFF = [5, 15, 45, 90]
+
+def _save_cache():
+    json.dump(_cache, open(CACHE, 'w'))
+
+def get(u, tries=4):
+    """带磁盘缓存与指数退避的取回；429 必须退避而不是当成空结果。"""
+    if u in _cache:
+        return _cache[u]
     for k in range(tries):
+        wait = MIN_INTERVAL - (time.time() - _last[0])
+        if wait > 0:
+            time.sleep(wait)
+        _last[0] = time.time()
         try:
-            with urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=60) as r:
-                return r.read().decode('utf-8', 'replace')
-        except Exception:
+            with urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=90) as r:
+                t = r.read().decode('utf-8', 'replace')
+            _cache[u] = t
+            _save_cache()
+            return t
+        except urllib.error.HTTPError as e:
+            if e.code in (429, 503) and k < tries - 1:
+                print('   [backoff %ds] %d %s' % (BACKOFF[k], e.code, u[:70]), flush=True)
+                time.sleep(BACKOFF[k])
+                continue
             if k == tries - 1:
+                print('   [http-fail] %s %s' % (e, u[:70]), flush=True)
                 return ''
-            time.sleep(delay * (k + 1))
+        except Exception as e:
+            if k == tries - 1:
+                print('   [err] %r %s' % (e, u[:70]), flush=True)
+                return ''
+            time.sleep(BACKOFF[k])
     return ''
 
 def inv(d):
@@ -133,14 +161,12 @@ for gid, qs in QUERIES.items():
             if c['doi'] in seen_doi:
                 continue
             cr = crossref_by_doi(c['doi'])
-            time.sleep(1.0)
             if not cr or not cr.get('title'):
                 continue
             s = sim(c['title'], cr['title'])
             if s < 0.75:
                 continue
             ax = arxiv_by_title(c['title'])
-            time.sleep(1.0)
             srcs = ['openalex', 'crossref'] + (['arxiv'] if ax else [])
             seen_doi.add(c['doi'])
             kept += 1
@@ -152,7 +178,6 @@ for gid, qs in QUERIES.items():
                              abstract=c['abstract'], abstract_len=len(c['abstract'])))
             print('%s | sim=%.2f | %-22s | c=%5s | %s' %
                   (gid, s, ','.join(srcs), c['cited'], (c['title'] or '')[:78]), flush=True)
-        time.sleep(1.0)
 
 json.dump(recs, open(f'{OUT}/readlist_doi.json', 'w'), indent=1)
 ok = [r for r in recs if r['n_sources'] >= 2 and r['abstract_len'] > 400 and r['title_sim'] >= 0.75]
