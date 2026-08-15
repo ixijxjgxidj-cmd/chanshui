@@ -4,6 +4,7 @@ import json, os, re, time, urllib.error, urllib.parse, urllib.request
 OUT = '/root/5.6+chanshui1/outputs/t2_round39c_literature_crossref_arxiv'
 UA = {'User-Agent': 'dizheng-research/1.0 (mailto:research@example.org)'}
 MIN_INTERVAL = 3.5
+MAX_429_RETRIES = 1
 CACHE = f'{OUT}/http_cache.json'
 _cache = {}
 _last = [0.0]
@@ -19,7 +20,7 @@ QUERIES = {
 def get(url):
     if url in _cache:
         return _cache[url]
-    for attempt, pause in enumerate((15, 45, 90)):
+    for attempt in range(MAX_429_RETRIES + 1):
         wait = MIN_INTERVAL - (time.time() - _last[0])
         if wait > 0: time.sleep(wait)
         _last[0] = time.time()
@@ -32,10 +33,10 @@ def get(url):
             return text
         except urllib.error.HTTPError as exc:
             if exc.code != 429: raise
-            if attempt == 2:
+            if attempt == MAX_429_RETRIES:
                 print('[skip-rate-limited]', url[:80], flush=True)
                 return ''
-            time.sleep(pause)
+            time.sleep(15)
 
 def norm_words(text):
     return set(re.sub(r'[^a-z0-9 ]', ' ', (text or '').lower()).split())
@@ -75,6 +76,10 @@ def arxiv_by_title(title):
     score, record = max(candidates, key=lambda x: x[0])
     return record | {'title_sim': round(score, 3)} if score >= .75 else None
 
+def checkpoint(records):
+    os.makedirs(OUT, exist_ok=True)
+    with open(f'{OUT}/readlist_crossref_arxiv.partial.json', 'w', encoding='utf-8') as f:
+        json.dump(records, f, ensure_ascii=False, indent=2)
 def build_records():
     records, seen = [], set()
     for group, queries in QUERIES.items():
@@ -90,6 +95,8 @@ def build_records():
                     'arxiv_title': ax['title'], 'arxiv_url': ax['url'], 'title_sim': ax['title_sim'],
                     'abstract': ax['abstract'], 'abstract_len': len(ax['abstract']),
                     'sources': ['crossref', 'arxiv'], 'n_sources': 2})
+                checkpoint(records)
+                print('VERIFIED', len(records), cr['doi'], cr['title'][:72], flush=True)
             if kept >= 4: break
     return records
 
