@@ -21,6 +21,7 @@ OUT = f'{ROOT}/outputs/t2_round39c_ablation'
 os.makedirs(OUT, exist_ok=True)
 sys.path.insert(0, ROOT)
 import public_data as pdata
+from stable_seed import region_seed, stable_seed
 
 pdata.enable_guard()
 _cg = sys.modules['compliance_guard']
@@ -295,8 +296,8 @@ losses = {}
 for (A, B, Cr) in SETUPS:
     key = f'{A}->{B}->{Cr}'
     mA, mB, mC = REG == A, REG == B, REG == Cr
-    tr, ho = pdata.event_split(np.where(mA)[0], SRCm, 0.85, seed=hash(A) % 9999)
-    seed = 1234 + len(tr) % 97
+    tr, ho = pdata.event_split(np.where(mA)[0], SRCm, 0.85, seed=region_seed(A))
+    seed = stable_seed('round39c', A, B, Cr) % 100000
     ho_set = set(ho.tolist())
     pool = np.array([i for i in range(len(idx)) if (not mB[i]) and (not mC[i]) and (i not in ho_set)])
     rs = np.random.RandomState(seed)
